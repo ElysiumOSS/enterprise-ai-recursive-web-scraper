@@ -1,0 +1,34 @@
+{
+  "badgeTemplate": "\t<a href=\"#contributors\" target=\"_blank\"><img alt=\"👪 All Contributors: <%= contributors.length %>\" src=\"https://img.shields.io/badge/%F0%9F%91%AA_all_contributors-<%= contributors.length %>-21bb42.svg\" /></a>",
+  "commit": false,
+  "commitConvention": "angular",
+  "commitType": "docs",
+  "contributors": [
+    {
+      "login": "WomB0ComB0",
+      "name": "Mike Odnis",
+      "avatar_url": "https://avatars.githubusercontent.com/u/95197809?v=4",
+      "profile": "https://www.mikeodnis.dev/",
+      "contributions": [
+        "code",
+        "content",
+        "doc",
+        "ideas",
+        "infra",
+        "maintenance",
+        "projectManagement",
+        "tool"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "contributorsSortAlphabetically": true,
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "projectName": "enterprise-ai-recursive-web-scraper",
+  "projectOwner": "WomB0ComB0",
+  "repoHost": "https://github.com",
+  "repoType": "github"
+}
