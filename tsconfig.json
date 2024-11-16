@@ -3,6 +3,8 @@
 		"declaration": true,
 		"declarationMap": true,
 		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+		"strictNullChecks": true,
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"noEmit": true,
@@ -12,5 +14,6 @@
 		"strict": true,
 		"target": "ES2022"
 	},
-	"include": ["src"]
+	"include": ["./src/**/*.ts"],
+	"exclude": ["node_modules"]
 }
