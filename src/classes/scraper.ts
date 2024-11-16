@@ -1,10 +1,20 @@
+/**
+ * @fileoverview Enhanced web scraping and content filtering functions for detecting and filtering inappropriate content
+ * @file scraper.ts
+ * @module scraper
+ * @description This module provides functionality for web scraping with content filtering capabilities.
+ * It includes classes for managing browser operations, text processing, and content filtering using
+ * Trie data structures. The module is designed to detect and filter NSFW content, slurs, and other
+ * inappropriate content from web pages.
+ */
+
 import puppeteer from "puppeteer-extra";
 import type { PuppeteerLaunchOptions, Browser, Page } from "puppeteer";
 import { PuppeteerExtra } from "puppeteer-extra";
 import { PuppeteerExtraPluginAdblocker } from "puppeteer-extra-plugin-adblocker";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { nsfw, nsfwNames, slurs } from "../data/index.js";
-import { Row, TrieNode } from "./types.js";
+import { TrieNode } from "./types.js";
 
 const puppeteerExtra = puppeteer as unknown as PuppeteerExtra;
 
@@ -17,288 +27,414 @@ puppeteerExtra.use(
 	}),
 );
 
-const createTrieNode = (): TrieNode => ({
-	children: {},
-	isEndOfWord: false,
-});
+/**
+ * Class representing a Trie data structure for efficient content filtering.
+ * @class
+ * @description Implements a Trie data structure optimized for string matching and filtering.
+ * The Trie allows for fast prefix-based searching and efficient storage of large word lists.
+ */
+class ContentTrie {
+	/** @private Root node of the Trie */
+	private root: TrieNode = this.createNode();
 
-const insertIntoTrie = (root: TrieNode, word: string): void => {
-	let node = root;
-	for (const char of word) {
-		node = node.children[char] = node.children[char] || createTrieNode();
+	/**
+	 * Creates a new Trie node with empty children map and end-of-word flag.
+	 * @private
+	 * @returns {TrieNode} A new initialized Trie node
+	 */
+	private createNode(): TrieNode {
+		return {
+			children: {},
+			isEndOfWord: false,
+		};
 	}
-	node.isEndOfWord = true;
-};
 
-const searchInTrie = (root: TrieNode, word: string): boolean => {
-	let node = root;
-	for (const char of word) {
-		if (!node.children[char]) {
-			return false;
-		}
-		node = node.children[char];
-	}
-	return node.isEndOfWord;
-};
-
-const createHashSet = <T>(arr: T[]): Set<T> => new Set(arr);
-
-const removeDuplicates = (text: string): string => {
-	const segments: string[] = text.match(/[^.!?]+[.!?]+/g) || [text];
-	const uniqueSegments = Array.from(new Set(segments));
-	return uniqueSegments.join(" ");
-};
-
-const wait = (s: number) => new Promise((r) => setTimeout(r, s * 1000));
-
-let cachedData: Row[] | null = null;
-let cachedNewWords: Row[] | null = null;
-let filterTrie: TrieNode | null = null;
-let filterDict: Set<string> | null = null;
-let newWordsTree: TrieNode | null = null;
-let cachedNSFW: string[] | null = null;
-
-const initializeFilterWords = (): void => {
-	if (!cachedData) {
-		cachedData = Object.keys(slurs).map((key) => ({ text: key }));
-		filterTrie = createTrieNode();
-		filterDict = createHashSet(Object.keys(slurs));
-		cachedData.forEach((row) => insertIntoTrie(filterTrie!, row.text));
-	}
-	if (!cachedNewWords) {
-		cachedNewWords = Object.keys(nsfwNames).map((key) => ({ text: key }));
-		newWordsTree = createTrieNode();
-		cachedNewWords.forEach((row) => insertIntoTrie(newWordsTree!, row.text));
-	}
-};
-
-const fetchRobotsTxt = async (url: string): Promise<string> => {
-	try {
-		const baseUrl = new URL(url).origin;
-		const robotsUrl = `${baseUrl}/robots.txt`;
-		const browser = await puppeteerExtra.launch({
-			headless: true,
-			args: ["--no-sandbox", "--disable-setuid-sandbox"],
-			timeout: 120000,
-		} as PuppeteerLaunchOptions);
-		const page = await browser.newPage();
-
-		await page.goto(robotsUrl, {
-			timeout: 120000,
-			waitUntil: "domcontentloaded",
-		});
-		const robotsTxtContent = await page.evaluate(() => document.body.innerText);
-
-		await browser.close();
-		return robotsTxtContent;
-	} catch (error) {
-		if (
-			error instanceof Error &&
-			(error.message.includes("net::ERR_NAME_NOT_RESOLVED") ||
-				error.message.includes("404"))
-		) {
-			return "";
-		}
-		throw new Error(
-			`Failed to fetch robots.txt for ${url}: ${
-				error instanceof Error ? error.message : "Unknown error"
-			}`,
-		);
-	}
-};
-
-const parseRobotsTxt = (
-	robotsTxtContent: string,
-	userAgent: string,
-	url: string,
-): { isAllowed: boolean; isDisallowed: boolean } => {
-	const lines = robotsTxtContent.split("\n");
-	let currentUserAgent: string | null = null;
-	let isAllowed = false;
-	let isDisallowed = false;
-
-	for (const line of lines) {
-		const trimmedLine = line.trim().toLowerCase();
-		if (trimmedLine.startsWith("user-agent:")) {
-			currentUserAgent = trimmedLine.split(":")[1].trim();
-		} else if (
-			currentUserAgent === userAgent.toLowerCase() ||
-			currentUserAgent === "*"
-		) {
-			if (trimmedLine.startsWith("disallow:")) {
-				const path = trimmedLine.split(":")[1].trim();
-				if (url.includes(path) || path === "") {
-					isDisallowed = true;
-				}
-			} else if (trimmedLine.startsWith("allow:")) {
-				const path = trimmedLine.split(":")[1].trim();
-				if (url.includes(path)) {
-					isAllowed = true;
-				}
+	/**
+	 * Inserts a word into the Trie structure.
+	 * @param {string} word - The word to insert into the Trie
+	 * @description Converts the word to lowercase and creates a path in the Trie,
+	 * marking the last node as an end of word.
+	 */
+	public insert(word: string): void {
+		let node = this.root;
+		for (const char of word.toLowerCase()) {
+			if (!node.children[char]) {
+				node.children[char] = this.createNode();
 			}
+			node = node.children[char];
 		}
+		node.isEndOfWord = true;
 	}
 
-	if (isDisallowed && isAllowed) {
-		isDisallowed = false;
-	}
-
-	return { isAllowed, isDisallowed };
-};
-
-const filterText = (text: string, replace: string): string => {
-	if (!text) {
-		return text;
-	}
-	const words = text.split(" ");
-	const filteredWords = words.map((word) =>
-		filterDict!.has(word) || searchInTrie(filterTrie!, word) ? replace : word,
-	);
-	return filteredWords.join(" ");
-};
-
-const scrape = async (
-	url: Readonly<string>,
-): Promise<
-	| {
-			flaggedDomain: boolean;
-			containsCensored: boolean;
-			filteredTexts: string[];
-	  }
-	| { [key: string]: string }
-> => {
-	try {
-		let isAllowed = true;
-		let isDisallowed = false;
-		const robotsTxtContent = await fetchRobotsTxt(url);
-		if (robotsTxtContent === "") {
-			return { error: "Robots.txt not found, cannot scrape" };
+	/**
+	 * Searches for a complete word in the Trie.
+	 * @param {string} word - The word to search for
+	 * @returns {boolean} True if the exact word exists in the Trie, false otherwise
+	 * @description Performs a case-insensitive search through the Trie to find an exact match
+	 */
+	public search(word: string): boolean {
+		let node = this.root;
+		for (const char of word.toLowerCase()) {
+			if (!node.children[char]) {
+				return false;
+			}
+			node = node.children[char];
 		}
-		const userAgents = robotsTxtContent
-			.split("\n")
-			.filter(
-				(line) =>
-					line.toLowerCase().startsWith("user-agent:") ||
-					line.toLowerCase().startsWith("user-agent"),
+		return node.isEndOfWord;
+	}
+
+	/**
+	 * Inserts multiple words into the Trie simultaneously.
+	 * @param {string[]} words - Array of words to insert
+	 * @description Efficiently inserts multiple words into the Trie structure
+	 */
+	public bulkInsert(words: string[]): void {
+		words.forEach((word) => this.insert(word));
+	}
+}
+
+/**
+ * Singleton class managing content filtering operations.
+ * @class
+ * @description Provides centralized content filtering functionality using multiple
+ * filtering mechanisms including Tries and Sets. Implements the Singleton pattern
+ * to ensure consistent filtering across the application.
+ */
+class ContentFilterManager {
+	/** @private Singleton instance */
+	private static instance: ContentFilterManager;
+	/** @private Trie for storing and matching filtered words */
+	private filterTrie: ContentTrie;
+	/** @private Set of NSFW domains */
+	private nsfwDomains: Set<string>;
+	/** @private Trie for storing and matching NSFW terms */
+	private nsfwNamesTrie: ContentTrie;
+	/** @private Set of filtered dictionary words */
+	private filterDict: Set<string>;
+
+	/**
+	 * Private constructor to prevent direct instantiation.
+	 * @private
+	 * @description Initializes all filtering data structures and loads initial data
+	 */
+	private constructor() {
+		this.filterTrie = new ContentTrie();
+		this.nsfwNamesTrie = new ContentTrie();
+		this.nsfwDomains = new Set(Object.keys(nsfw));
+		this.filterDict = new Set(Object.keys(slurs));
+
+		this.filterTrie.bulkInsert(Object.keys(slurs));
+		this.nsfwNamesTrie.bulkInsert(Object.keys(nsfwNames));
+	}
+
+	/**
+	 * Gets or creates the singleton instance of ContentFilterManager.
+	 * @returns {ContentFilterManager} The singleton instance
+	 * @description Ensures only one instance of ContentFilterManager exists
+	 */
+	public static getInstance(): ContentFilterManager {
+		if (!ContentFilterManager.instance) {
+			ContentFilterManager.instance = new ContentFilterManager();
+		}
+		return ContentFilterManager.instance;
+	}
+
+	/**
+	 * Checks if a URL contains or belongs to an NSFW domain.
+	 * @param {string} url - The URL to check
+	 * @returns {boolean} True if the URL matches any NSFW domain patterns
+	 * @description Performs case-sensitive matching against known NSFW domains
+	 */
+	public isNSFWDomain(url: string): boolean {
+		return Array.from(this.nsfwDomains).some((domain) => url.includes(domain));
+	}
+
+	/**
+	 * Filters text by replacing inappropriate words with a replacement string.
+	 * @param {string} text - The text to filter
+	 * @param {string} [replacement="***"] - The string to replace filtered words with
+	 * @returns {string} The filtered text with inappropriate words replaced
+	 * @description Performs word-by-word filtering using both Trie and Set-based matching
+	 */
+	public filterText(text: string, replacement: string = "***"): string {
+		if (!text) {
+			return text;
+		}
+
+		return text
+			.split(/\s+/)
+			.map((word) =>
+				this.filterDict.has(word.toLowerCase()) ||
+				this.filterTrie.search(word.toLowerCase())
+					? replacement
+					: word,
 			)
-			.map((line) => line.split(":")[1].trim());
+			.join(" ");
+	}
+}
 
-		if (userAgents.length > 0) {
-			const results = userAgents.map((userAgent) =>
-				parseRobotsTxt(robotsTxtContent, userAgent, url),
-			);
-			isAllowed = results.some((result) => result.isAllowed);
-			isDisallowed = results.some((result) => result.isDisallowed);
-		}
+/**
+ * Utility class for processing and cleaning text content.
+ * @class
+ * @description Provides static methods for text cleaning, normalization,
+ * and duplicate removal operations.
+ */
+class TextProcessor {
+	/** @private Regular expression for matching emoji characters */
+	private static readonly EMOJI_PATTERN = /[\u{1F600}-\u{1F64F}]/gu;
+	/** @private Regular expression for matching non-ASCII characters */
+	private static readonly NON_ASCII_PATTERN = /[^\x00-\x7F]/g;
+	/** @private Regular expression for matching multiple whitespace characters */
+	private static readonly WHITESPACE_PATTERN = /\s+/g;
+	/** @private Regular expression for matching newline characters */
+	private static readonly NEWLINE_PATTERN = /[\n\r]+/g;
 
-		if (isDisallowed) {
-			return { error: `Scraping disallowed by robots.txt for ${url}` };
-		}
-		if (!isAllowed) {
-			return {
-				error: `Scraping not explicitly allowed by robots.txt for ${url}`,
-			};
-		}
-	} catch (error) {
-		if (error instanceof Error && error.message.includes("net::ERR_CERT_")) {
-			console.error("SSL/TLS Error:", error.message);
-			throw new Error(`SSL/TLS Error: ${error.message}`);
-		} else {
-			throw new Error(
-				`Error during robots.txt parsing: ${
-					error instanceof Error ? error.message : "Unknown error"
-				}`,
-			);
-		}
+	/**
+	 * Cleans and normalizes text content.
+	 * @param {string} text - The text to clean
+	 * @returns {string} The cleaned and normalized text
+	 * @description Removes emojis, non-ASCII characters, normalizes whitespace,
+	 * and converts multiple newlines to single spaces
+	 */
+	public static cleanText(text: string): string {
+		return text
+			.trim()
+			.replace(this.EMOJI_PATTERN, "")
+			.replace(this.NON_ASCII_PATTERN, "")
+			.replace(this.WHITESPACE_PATTERN, " ")
+			.replace(this.NEWLINE_PATTERN, " ");
 	}
 
-	if (!cachedNSFW) {
-		cachedNSFW = Object.keys(nsfw);
+	/**
+	 * Removes duplicate text segments from content.
+	 * @param {string} text - The text to process
+	 * @returns {string} Text with duplicate segments removed
+	 * @description Splits text into segments at sentence boundaries and removes duplicates
+	 */
+	public static removeDuplicateSegments(text: string): string {
+		const segments = text.match(/[^.!?]+[.!?]+/g) || [text];
+		return Array.from(new Set(segments)).join(" ");
+	}
+}
+
+/**
+ * Class managing browser operations for web scraping.
+ * @class
+ * @description Provides static methods for browser management, page creation,
+ * and content extraction operations.
+ */
+class BrowserManager {
+	/**
+	 * Creates and configures a new browser page.
+	 * @param {Browser} browser - The browser instance to create the page in
+	 * @returns {Promise<Page>} A configured page instance
+	 * @description Creates a new page with request interception enabled and
+	 * configured to block unnecessary resource types
+	 */
+	public static async createPage(browser: Browser): Promise<Page> {
+		const page = await browser.newPage();
+		await page.setRequestInterception(true);
+
+		page.on("request", (request) => {
+			if (
+				["image", "stylesheet", "font", "media"].includes(
+					request.resourceType(),
+				)
+			) {
+				request.abort();
+			} else {
+				request.continue();
+			}
+		});
+
+		return page;
 	}
 
-	const nsfw_domain = cachedNSFW.some((domain) => url.includes(domain));
-	if (nsfw_domain) {
-		return { error: "Domain contains NSFW content" };
-	}
-
-	await initializeFilterWords();
-	let browser: Browser;
-	try {
-		browser = await puppeteerExtra.launch({
+	/**
+	 * Launches a new browser instance with stealth and blocking capabilities.
+	 * @returns {Promise<Browser>} A configured browser instance
+	 * @description Launches a headless browser with security and performance optimizations
+	 */
+	public static async launch(): Promise<Browser> {
+		return await puppeteerExtra.launch({
 			headless: true,
-			args: ["--no-sandbox", "--disable-setuid-sandbox"],
+			args: [
+				"--no-sandbox",
+				"--disable-setuid-sandbox",
+				"--disable-dev-shm-usage",
+				"--disable-gpu",
+				"--disable-web-security",
+			],
 			timeout: 0,
 		} as PuppeteerLaunchOptions);
-	} catch (error) {
-		throw new Error(
-			`Error launching browser: ${
-				error instanceof Error ? error.message : "Unknown error"
-			}`,
-		);
 	}
 
-	let page: Page;
-	try {
-		page = await browser.newPage();
-		const response = await page.goto(url, {
-			timeout: 0,
-			waitUntil: "domcontentloaded",
-		});
-		await wait(5);
-
-		const finalUrl = response?.url() || url;
-		if (cachedNSFW.some((domain) => finalUrl.includes(domain))) {
-			await browser.close();
-			return { error: "NSFW domain" };
-		}
-
-		const texts = await page.evaluate(() => {
+	/**
+	 * Extracts text content from a webpage.
+	 * @param {Page} page - The page to extract content from
+	 * @returns {Promise<string[]>} Array of extracted text content
+	 * @description Extracts text from common content elements while filtering empty content
+	 */
+	public static async extractPageContent(page: Page): Promise<string[]> {
+		return await page.evaluate(() => {
 			const elements = Array.from(
 				document.querySelectorAll(
 					"p, div, span, a, h1, h2, h3, h4, h5, h6, li",
 				),
 			);
 			return elements
-				.map(
-					(el) =>
-						el.textContent
-							?.trim()
-							.replace(/[\u{1F600}-\u{1F64F}]/gu, "")
-							.replace(/[^\x00-\x7F]/g, "")
-							.replace(/\s+/g, " ")
-							.replace(/[\n\r]+/g, " ") || "",
-				)
+				.map((el) => el.textContent?.trim() || "")
 				.filter((text) => text.length > 0);
 		});
+	}
+}
 
-		await browser.close();
+/**
+ * Main scraping function that processes and filters web content.
+ * @param {string} url - The URL to scrape
+ * @returns {Promise<{flaggedDomain: boolean, containsCensored: boolean, filteredTexts: string[]} | {error: string}>}
+ * Object containing scraping results or error information
+ * @description Coordinates the entire scraping process including:
+ * - URL validation
+ * - Browser management
+ * - Content extraction
+ * - Text processing
+ * - Content filtering
+ * @throws {Error} Various errors related to browser operations or content processing
+ */
+export async function scrape(url: string): Promise<
+	| {
+			flaggedDomain: boolean;
+			containsCensored: boolean;
+			filteredTexts: string[];
+	  }
+	| { error: string }
+> {
+	let browser: Browser | null = null;
+	let page: Page | null = null;
 
-		const processedTexts = texts.map(removeDuplicates);
-		const uniqueTexts = createHashSet(processedTexts);
-		const filteredTexts = await Promise.all(
-			Array.from(uniqueTexts).map((text: string) => filterText(text, "***")),
+	try {
+		if (!url || typeof url !== "string") {
+			throw new Error("Invalid URL provided");
+		}
+
+		const filterManager = ContentFilterManager.getInstance();
+
+		if (filterManager.isNSFWDomain(url)) {
+			return { error: "Domain contains NSFW content" };
+		}
+
+		browser = await BrowserManager.launch().catch((err) => {
+			throw new Error(`Failed to launch browser: ${err.message}`);
+		});
+
+		page = await BrowserManager.createPage(browser).catch((err) => {
+			throw new Error(`Failed to create page: ${err.message}`);
+		});
+
+		try {
+			await Promise.race([
+				page.goto(url, { waitUntil: "domcontentloaded" }),
+				new Promise((_, reject) =>
+					setTimeout(
+						() => reject(new Error("Navigation timeout after 30 seconds")),
+						30000,
+					),
+				),
+			]);
+		} catch (navigationError) {
+			throw new Error(
+				`Failed to navigate to ${url}: ${
+					navigationError instanceof Error
+						? navigationError.message
+						: navigationError
+				}`,
+			);
+		}
+
+		const finalUrl = page.url();
+		if (filterManager.isNSFWDomain(finalUrl)) {
+			return { error: "NSFW domain detected after redirect" };
+		}
+
+		const rawTexts = await BrowserManager.extractPageContent(page).catch(
+			(err) => {
+				throw new Error(`Failed to extract page content: ${err.message}`);
+			},
 		);
-		const containsCensored = filteredTexts.some((text: string) =>
-			text.includes("***"),
-		);
+
+		try {
+			const processedTexts = rawTexts.map((text) => {
+				const cleaned = TextProcessor.cleanText(text);
+				return TextProcessor.removeDuplicateSegments(cleaned);
+			});
+
+			const uniqueTexts = Array.from(new Set(processedTexts));
+			const filteredTexts = uniqueTexts.map((text) =>
+				filterManager.filterText(text),
+			);
+
+			const containsCensored = filteredTexts.some((text) =>
+				text.includes("***"),
+			);
+
+			return {
+				flaggedDomain: false,
+				containsCensored,
+				filteredTexts,
+			};
+		} catch (processingError) {
+			throw new Error(
+				`Failed to process text content: ${
+					processingError instanceof Error
+						? processingError.message
+						: processingError
+				}`,
+			);
+		}
+	} catch (error) {
+		console.error(`Scraping error:`, {
+			url,
+			error: error instanceof Error ? error.stack : error,
+			timestamp: new Date().toISOString(),
+		});
 
 		return {
-			flaggedDomain: false,
-			containsCensored,
-			filteredTexts,
+			error:
+				error instanceof Error
+					? `Scraping failed: ${error.message}`
+					: "Scraping failed: Unknown error occurred",
 		};
-	} catch (error) {
-		console.error(`Scraping failed: ${error}`);
-		throw new Error(
-			`Scraping failed: ${
-				error instanceof Error ? error.message : "Unknown error"
-			}`,
-		);
 	} finally {
-		if (browser) {
-			await browser.close();
+		try {
+			if (page) {
+				await page.close().catch(() => {});
+			}
+			if (browser) {
+				await browser.close().catch(() => {});
+			}
+		} catch (cleanupError) {
+			console.error("Error during cleanup:", cleanupError);
 		}
 	}
+}
+
+/**
+ * Initializes the content filtering system.
+ * @description Creates the singleton instance of ContentFilterManager and
+ * loads all filtering data structures
+ */
+export const initializeFilterWords = (): void => {
+	ContentFilterManager.getInstance();
 };
 
-export { scrape, initializeFilterWords, filterText };
+/**
+ * Filters text content using the ContentFilterManager.
+ * @param {string} text - The text to filter
+ * @param {string} [replace="***"] - The replacement string for filtered content
+ * @returns {string} The filtered text with inappropriate content replaced
+ * @description Provides a convenient wrapper around ContentFilterManager's filterText method
+ */
+export const filterText = (text: string, replace: string = "***"): string => {
+	return ContentFilterManager.getInstance().filterText(text, replace);
+};
