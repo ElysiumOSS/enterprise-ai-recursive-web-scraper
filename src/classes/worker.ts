@@ -11,111 +11,116 @@
  * - Type-safe message passing
  */
 
-import { WorkerMessage, WorkerResult } from "./types.js";
+import { WorkerMessage, WorkerTask } from "./types.js";
+import { scrape } from "./scraper.js";
+import puppeteer, { PuppeteerExtra } from "puppeteer-extra";
+import { Browser } from "puppeteer";
+
+let browser: Browser | null = null;
+const puppeteerExtra = puppeteer as unknown as PuppeteerExtra;
 
 /**
- * Worker thread class for handling asynchronous tasks
- * @class WorkerThread
- * @description Manages task execution within a web worker context. Features include:
- * - Task handler registration and management
- * - Message handling and response formatting
- * - Error handling and reporting
- * - Performance measurement
- * - Default task handling fallback
+ * Helper function to create and send worker messages
+ * @param type Message type
+ * @param id Message ID
+ * @param payload Message payload
  */
-export class WorkerThread {
-	/**
-	 * Map storing task handlers keyed by task type
-	 * @private
-	 * @type {Map<string, (data: any) => Promise<any>>}
-	 */
-	private taskHandlers: Map<string, (data: any) => Promise<any>> = new Map();
+function sendMessage(
+	type: "READY" | "RESULT" | "ERROR",
+	id: string,
+	payload: any,
+) {
+	self.postMessage({
+		type,
+		id,
+		payload,
+		timestamp: Date.now(),
+	} as WorkerMessage);
+}
 
-	/**
-	 * Initializes a new WorkerThread instance
-	 * @constructor
-	 * @description Sets up message handling and registers default task handler.
-	 * The default handler simply returns the input data unchanged.
-	 */
-	constructor() {
-		self.onmessage = this.handleMessage.bind(this);
+self.addEventListener(
+	"message",
+	async (event: MessageEvent<WorkerMessage<WorkerTask>>) => {
+		const startTime = Date.now();
+		const message = event.data;
 
-		this.registerTaskHandler("DEFAULT", async (data) => {
-			return data;
-		});
-	}
+		try {
+			switch (message.type) {
+				case "INIT":
+					try {
+						browser = await puppeteerExtra.launch({
+							headless: true,
+							args: ["--no-sandbox", "--disable-setuid-sandbox"],
+							timeout: 30000,
+						});
 
-	/**
-	 * Handles incoming messages from the main thread
-	 * @private
-	 * @param {MessageEvent<WorkerMessage>} event - Message event containing task data
-	 * @description Processes incoming task messages by:
-	 * - Extracting task information
-	 * - Finding appropriate handler
-	 * - Measuring execution time
-	 * - Sending results or errors back to main thread
-	 * @throws {Error} When no handler is registered for the task type
-	 */
-	private async handleMessage(event: MessageEvent<WorkerMessage>) {
-		const { id, type, payload } = event.data;
+						sendMessage("READY", message.id, {
+							initialized: true,
+							timestamp: Date.now(),
+						});
+					} catch (error) {
+						console.error("Browser initialization failed:", error);
+						sendMessage("ERROR", message.id, {
+							error: error instanceof Error ? error.message : "Unknown error",
+							executionTime: Date.now() - startTime,
+						});
+					}
+					break;
 
-		if (type === "TASK") {
-			try {
-				const startTime = performance.now();
-				const handler =
-					this.taskHandlers.get(payload.type) ||
-					this.taskHandlers.get("DEFAULT");
+				case "TASK":
+					if (!browser) {
+						sendMessage("ERROR", message.id, {
+							error: "Browser not initialized",
+							executionTime: Date.now() - startTime,
+						});
+						return;
+					}
 
-				if (!handler) {
-					throw new Error(
-						`No handler registered for task type: ${payload.type}`,
-					);
-				}
+					if (!message.payload.url) {
+						sendMessage("ERROR", message.id, {
+							error: "URL is missing in TASK payload",
+							executionTime: Date.now() - startTime,
+						});
+						return;
+					}
 
-				const result = await handler(payload.data);
-				const executionTime = performance.now() - startTime;
+					try {
+						const result = await scrape(message.payload.url, browser);
+						sendMessage("RESULT", message.id, {
+							taskId: message.id,
+							result,
+							executionTime: Date.now() - startTime,
+						});
+					} catch (error) {
+						sendMessage("ERROR", message.id, {
+							taskId: message.id,
+							error: error instanceof Error ? error.message : "Unknown error",
+							executionTime: Date.now() - startTime,
+						});
+					}
+					break;
 
-				const response: WorkerMessage<WorkerResult> = {
-					id,
-					type: "RESULT",
-					payload: {
-						taskId: payload.id,
-						result,
-						executionTime,
-					},
-					timestamp: Date.now(),
-				};
-
-				self.postMessage(response);
-			} catch (error) {
-				const errorResponse: WorkerMessage = {
-					id,
-					type: "ERROR",
-					payload: {
-						taskId: payload.id,
-						error: error instanceof Error ? error.message : String(error),
-					},
-					timestamp: Date.now(),
-				};
-
-				self.postMessage(errorResponse);
+				default:
+					console.warn(`Unknown message type: ${message.type}`);
 			}
+		} catch (error) {
+			console.error("Unexpected error:", error);
+			sendMessage("ERROR", message.id, {
+				error: error instanceof Error ? error.message : "Unknown error",
+				executionTime: Date.now() - startTime,
+			});
+		}
+	},
+);
+
+self.addEventListener("unload", async () => {
+	if (browser) {
+		try {
+			await browser.close();
+		} catch (error) {
+			console.error("Error closing browser:", error);
+		} finally {
+			browser = null;
 		}
 	}
-
-	/**
-	 * Registers a new task handler
-	 * @public
-	 * @param {string} type - Type identifier for the task
-	 * @param {(data: any) => Promise<any>} handler - Async function to handle the task
-	 * @description Adds a new task handler to the handler map. If a handler already exists
-	 * for the given type, it will be overwritten. The handler should be an async function
-	 * that takes task data as input and returns a promise resolving to the result.
-	 */
-	public registerTaskHandler(
-		type: string,
-		handler: (data: any) => Promise<any>,
-	) {
-		this.taskHandlers.set(type, handler);
-	}
-}
+});

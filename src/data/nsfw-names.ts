@@ -11302,4 +11302,4 @@ export const nsfwNames: Readonly<Record<string, string>> = {
 	zzitube: "zzitube",
 } as const;
 
-export type Slur = keyof typeof nsfwNames;
+export type NsfwName = keyof typeof nsfwNames;

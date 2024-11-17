@@ -1,14 +1,15 @@
 export interface WorkerMessage<T = any> {
 	id: string;
-	type: "TASK" | "RESULT" | "ERROR" | "STATUS";
+	type: "TASK" | "RESULT" | "ERROR" | "STATUS" | "READY" | "INIT";
 	payload: T;
 	timestamp: number;
 }
 
 export interface WorkerTask {
 	id: string;
-	data: any;
-	type: string;
+	type: "TASK" | "RESULT" | "ERROR" | "STATUS" | "READY" | "INIT";
+	url?: string;
+	data?: any;
 }
 
 export interface WorkerResult {
@@ -16,10 +17,6 @@ export interface WorkerResult {
 	result: any;
 	error?: string;
 	executionTime?: number;
-}
-
-export interface Row {
-	text: string;
 }
 
 export interface TrieNode {

@@ -3,7 +3,7 @@
 After [forking the repo from GitHub](https://help.github.com/articles/fork-a-repo) and [installing pnpm](https://pnpm.io/installation):
 
 ```shell
-git clone https://github.com/<your-name-here>/enterprise-ai-recursive-web-scraper
+git clone https://github.com/ < your-name-here > /enterprise-ai-recursive-web-scraper
 cd enterprise-ai-recursive-web-scraper
 pnpm install
 ```

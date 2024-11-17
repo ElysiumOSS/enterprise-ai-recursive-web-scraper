@@ -21,6 +21,7 @@
  * @requires ./thread.js - Thread pool implementation for concurrent processing
  * @requires ./scraper.js - Content extraction and filtering logic
  * @requires ../constants/gemini-settings.js - Configuration for Gemini LLM
+ * @requires ./content-filter.js - Content filtering logic
  */
 
 import { chromium, Browser, Page } from "playwright";
@@ -30,6 +31,7 @@ import { ThreadPool } from "./thread.js";
 import { scrape } from "./scraper.js";
 import { genAI } from "../constants/gemini-settings.js";
 import { safetySettings } from "../constants/gemini-settings.js";
+import { ContentFilterManager } from "./scraper.js";
 
 /**
  * Represents the complete result of processing a single web page, including all generated artifacts
@@ -95,6 +97,7 @@ export class EnhancedWebScraper {
 	private results: Map<string, PageResult> = new Map();
 	private baseUrl: string = "";
 	private outputDir: string;
+	private readonly contentFilter: ContentFilterManager;
 
 	/**
 	 * Initializes a new EnhancedWebScraper instance with specified output directory and worker count.
@@ -116,8 +119,12 @@ export class EnhancedWebScraper {
 		outputDir: string = "scraping_output",
 		maxWorkers = navigator.hardwareConcurrency || 4,
 	) {
-		this.threadPool = new ThreadPool("./worker.js", maxWorkers);
+		this.threadPool = new ThreadPool(
+			new URL("./worker.ts", import.meta.url).href,
+			maxWorkers,
+		);
 		this.outputDir = outputDir;
+		this.contentFilter = ContentFilterManager.getInstance();
 	}
 
 	/**
@@ -256,6 +263,8 @@ export class EnhancedWebScraper {
 	 */
 	private async processWithLLM(content: string): Promise<string> {
 		try {
+			const filteredContent = this.contentFilter.filterText(content);
+
 			const prompt = `
         Please analyze and format the following web content into a structured format:
         - Extract main topics and themes
@@ -264,7 +273,7 @@ export class EnhancedWebScraper {
         - Remove redundant or irrelevant information
         
         Content:
-        ${content}
+        ${filteredContent}
       `;
 
 			const model = await genAI.getGenerativeModel({
@@ -314,6 +323,17 @@ export class EnhancedWebScraper {
 		}
 
 		try {
+			if (this.contentFilter.isNSFWDomain(url)) {
+				return {
+					url,
+					contentPath: "",
+					processedContentPath: "",
+					screenshots: [],
+					error: "NSFW domain detected",
+					timestamp: Date.now(),
+				};
+			}
+
 			const page = await browser.newPage();
 			await page.goto(url, { waitUntil: "networkidle" });
 
@@ -325,10 +345,12 @@ export class EnhancedWebScraper {
 			}
 
 			const filteredTexts = Array.isArray(scrapedContent.filteredTexts)
-				? scrapedContent.filteredTexts.join("\n")
-				: scrapedContent.filteredTexts;
-			const contentPath = await this.saveToFile(filteredTexts, "content", url);
+				? scrapedContent.filteredTexts
+						.map((text) => this.contentFilter.filterText(text))
+						.join("\n")
+				: this.contentFilter.filterText(scrapedContent.filteredTexts);
 
+			const contentPath = await this.saveToFile(filteredTexts, "content", url);
 			const processedContent = await this.processWithLLM(filteredTexts);
 			const processedContentPath = await this.saveToFile(
 				processedContent,
@@ -354,7 +376,7 @@ export class EnhancedWebScraper {
 					this.processedUrls.add(link); // Mark as processed immediately to prevent duplicates
 					try {
 						// Only pass the URL, not the browser instance
-						await this.threadPool.submitTask("SCRAPE_PAGE", { url: link });
+						await this.threadPool.submitTask("TASK", link, {});
 					} catch (error) {
 						console.error(`Failed to queue URL ${link}:`, error);
 					}
@@ -409,45 +431,65 @@ export class EnhancedWebScraper {
 	 * // Returns map of PageResults for all processed pages
 	 */
 	public async scrapeWebsite(url: string): Promise<Map<string, PageResult>> {
+		if (!url || typeof url !== "string") {
+			throw new Error("Invalid URL provided");
+		}
+
+		console.log("Initializing scraper for URL:", url);
+
 		this.baseUrl = new URL(url).origin;
 		await this.initializeDirectories();
-
-		const browser = await chromium.launch({
-			headless: true,
-		});
+		console.log("Directories initialized.");
 
 		try {
-			// Initialize the worker pool with the browser instance
-			await this.threadPool.submitTask("INIT", { initialized: true });
+			// Initialize thread pool first
+			await this.threadPool.initialize();
 
-			// Submit the initial URL for processing
-			await this.processSinglePage(url, browser);
+			console.log("Submitting INIT tasks to all workers.");
 
-			// Process discovered URLs
-			let lastQueueSize = 0;
-			let stableCount = 0;
-
-			while (true) {
-				const activeCount = this.threadPool.getActiveTaskCount();
-				const queuedCount = this.threadPool.getQueuedTaskCount();
-
-				// If nothing is happening and queue hasn't changed in 3 checks, we're done
-				if (activeCount === 0 && queuedCount === lastQueueSize) {
-					stableCount++;
-					if (stableCount >= 3) {
-						break;
-					}
-				} else {
-					stableCount = 0;
-				}
-
-				lastQueueSize = queuedCount;
-				await new Promise((resolve) => setTimeout(resolve, 1000));
+			// Initialize workers
+			const initPromises = [];
+			for (let i = 0; i < this.threadPool.getWorkerCount(); i++) {
+				initPromises.push(
+					this.threadPool
+						.submitTask("INIT")
+						.catch((err) =>
+							console.error(`Worker ${i} browser init failed:`, err),
+						),
+				);
 			}
 
+			// Wait for all browser initializations to complete
+			await Promise.allSettled(initPromises);
+			console.log("All workers initialized.");
+
+			// Add delay to ensure browser initialization is complete
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+			console.log("Delay added to ensure workers are ready.");
+
+			// Then submit the URL for processing
+			console.log(`Submitting TASK for URL: ${url}`);
+			const result = await this.threadPool.submitTask(
+				"TASK",
+				url, // Provide URL for TASK
+				{
+					browserConfig: {
+						headless: true,
+					},
+				},
+			);
+
+			if ("error" in result) {
+				throw new Error(result.error);
+			}
+
+			console.log(`TASK completed for URL: ${url}`);
+			this.results.set(url, result);
 			return this.results;
+		} catch (error) {
+			console.error("Scraping failed:", error);
+			throw error;
 		} finally {
-			await browser.close();
 			await this.threadPool.shutdown();
 		}
 	}

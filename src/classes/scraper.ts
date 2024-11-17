@@ -13,7 +13,6 @@ import type { PuppeteerLaunchOptions, Browser, Page } from "puppeteer";
 import { PuppeteerExtra } from "puppeteer-extra";
 import { PuppeteerExtraPluginAdblocker } from "puppeteer-extra-plugin-adblocker";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import { nsfw, nsfwNames, slurs } from "../data/index.js";
 import { TrieNode } from "./types.js";
 
 const puppeteerExtra = puppeteer as unknown as PuppeteerExtra;
@@ -100,7 +99,7 @@ class ContentTrie {
  * filtering mechanisms including Tries and Sets. Implements the Singleton pattern
  * to ensure consistent filtering across the application.
  */
-class ContentFilterManager {
+export class ContentFilterManager {
 	/** @private Singleton instance */
 	private static instance: ContentFilterManager;
 	/** @private Trie for storing and matching filtered words */
@@ -111,6 +110,8 @@ class ContentFilterManager {
 	private nsfwNamesTrie: ContentTrie;
 	/** @private Set of filtered dictionary words */
 	private filterDict: Set<string>;
+	/** @private Maximum content length for processing */
+	private readonly MAX_CONTENT_LENGTH = 1_000_000; // 1MB
 
 	/**
 	 * Private constructor to prevent direct instantiation.
@@ -120,11 +121,9 @@ class ContentFilterManager {
 	private constructor() {
 		this.filterTrie = new ContentTrie();
 		this.nsfwNamesTrie = new ContentTrie();
-		this.nsfwDomains = new Set(Object.keys(nsfw));
-		this.filterDict = new Set(Object.keys(slurs));
-
-		this.filterTrie.bulkInsert(Object.keys(slurs));
-		this.nsfwNamesTrie.bulkInsert(Object.keys(nsfwNames));
+		this.nsfwDomains = new Set();
+		this.filterDict = new Set();
+		this.loadFilters();
 	}
 
 	/**
@@ -137,6 +136,24 @@ class ContentFilterManager {
 			ContentFilterManager.instance = new ContentFilterManager();
 		}
 		return ContentFilterManager.instance;
+	}
+
+	/**
+	 * Loads filter data from configuration files.
+	 * @private
+	 * @throws {Error} If filter initialization fails
+	 */
+	private async loadFilters(): Promise<void> {
+		try {
+			const { nsfw, nsfwNames, slurs } = await import("../data/index.js");
+			this.nsfwDomains = new Set(Object.keys(nsfw));
+			this.filterDict = new Set(Object.keys(slurs));
+			this.filterTrie.bulkInsert(Object.keys(slurs));
+			this.nsfwNamesTrie.bulkInsert(Object.keys(nsfwNames));
+		} catch (error) {
+			console.error("Failed to load filters:", error);
+			throw new Error("Filter initialization failed");
+		}
 	}
 
 	/**
@@ -154,18 +171,20 @@ class ContentFilterManager {
 	 * @param {string} text - The text to filter
 	 * @param {string} [replacement="***"] - The string to replace filtered words with
 	 * @returns {string} The filtered text with inappropriate words replaced
+	 * @throws {Error} If content length exceeds maximum limit
 	 * @description Performs word-by-word filtering using both Trie and Set-based matching
 	 */
 	public filterText(text: string, replacement: string = "***"): string {
-		if (!text) {
-			return text;
+		if (!text || text.length > this.MAX_CONTENT_LENGTH) {
+			throw new Error("Invalid content length");
 		}
 
 		return text
 			.split(/\s+/)
 			.map((word) =>
 				this.filterDict.has(word.toLowerCase()) ||
-				this.filterTrie.search(word.toLowerCase())
+				this.filterTrie.search(word.toLowerCase()) ||
+				this.nsfwNamesTrie.search(word.toLowerCase())
 					? replacement
 					: word,
 			)
@@ -302,25 +321,36 @@ class BrowserManager {
  * - Content filtering
  * @throws {Error} Various errors related to browser operations or content processing
  */
-export async function scrape(url: string): Promise<
+export async function scrape(
+	url: string,
+	browser: Browser | null = null,
+): Promise<
 	| {
 			flaggedDomain: boolean;
 			containsCensored: boolean;
 			filteredTexts: string[];
 	  }
-	| { error: string }
+	| {
+			error: string;
+	  }
 > {
-	let browser: Browser | null = null;
 	let page: Page | null = null;
 
 	try {
+		console.log(`Scraping URL: ${url}`);
+
 		if (!url || typeof url !== "string") {
-			throw new Error("Invalid URL provided");
+			throw new Error(
+				`Invalid URL provided: ${
+					typeof url === "object" ? JSON.stringify(url, null, 2) : url
+				}`,
+			);
 		}
 
 		const filterManager = ContentFilterManager.getInstance();
 
 		if (filterManager.isNSFWDomain(url)) {
+			console.log(`URL belongs to NSFW domain: ${url}`);
 			return { error: "Domain contains NSFW content" };
 		}
 
@@ -354,7 +384,10 @@ export async function scrape(url: string): Promise<
 
 		const finalUrl = page.url();
 		if (filterManager.isNSFWDomain(finalUrl)) {
-			return { error: "NSFW domain detected after redirect" };
+			console.log(
+				`Final URL after navigation belongs to NSFW domain: ${finalUrl}`,
+			);
+			return { error: "Domain contains NSFW content" };
 		}
 
 		const rawTexts = await BrowserManager.extractPageContent(page).catch(
@@ -373,6 +406,7 @@ export async function scrape(url: string): Promise<
 			const filteredTexts = uniqueTexts.map((text) =>
 				filterManager.filterText(text),
 			);
+			console.log(`Filtered text for URL: ${url}`);
 
 			const containsCensored = filteredTexts.some((text) =>
 				text.includes("***"),
@@ -417,6 +451,17 @@ export async function scrape(url: string): Promise<
 			console.error("Error during cleanup:", cleanupError);
 		}
 	}
+}
+
+async function extractPageContent(page: Page): Promise<string[]> {
+	const elements = await page.$$eval(
+		"p, div, span, a, h1, h2, h3, h4, h5, h6, li",
+		(elements) =>
+			elements
+				.map((el) => el.textContent?.trim() || "")
+				.filter((text) => text.length > 0),
+	);
+	return elements;
 }
 
 /**

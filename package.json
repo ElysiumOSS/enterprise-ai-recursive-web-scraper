@@ -28,12 +28,14 @@
 		"lint:md": "markdownlint \"**/*.md\" \".github/**/*.md\" --rules sentences-per-line",
 		"lint:packages": "pnpm dedupe --check",
 		"lint:spelling": "cspell \"**\" \".github/**/*\"",
-		"prepare": "husky",
 		"test": "vitest",
 		"tsc": "tsc"
 	},
 	"lint-staged": {
-		"*": "prettier --ignore-unknown --write"
+		"src/**/*.{js,ts}": [
+			"node --max-old-space-size=8192 node_modules/prettier/bin-prettier.js --ignore-unknown --write"
+		],
+		"package.json": "prettier --write"
 	},
 	"dependencies": {
 		"@google/generative-ai": "^0.21.0",

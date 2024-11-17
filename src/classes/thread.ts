@@ -8,6 +8,7 @@
  */
 
 import { WorkerMessage, WorkerResult, WorkerTask } from "./types.js";
+import { EventEmitter } from "events";
 
 /**
  * Thread pool manager for coordinating Web Worker threads.
@@ -19,9 +20,9 @@ import { WorkerMessage, WorkerResult, WorkerTask } from "./types.js";
  * - Worker lifecycle management
  * - Automatic worker reuse and cleanup
  */
-export class ThreadPool {
-	/** @private Array of available worker threads */
-	private workers: Worker[] = [];
+export class ThreadPool extends EventEmitter {
+	/** @public Array of available worker threads */
+	public workers: Worker[] = [];
 	/** @private Queue of pending tasks waiting to be processed */
 	private taskQueue: WorkerTask[] = [];
 	/** @private Set of workers currently processing tasks */
@@ -50,91 +51,91 @@ export class ThreadPool {
 		workerScript: string,
 		maxWorkers = navigator.hardwareConcurrency || 4,
 	) {
+		super();
 		this.workerScript = workerScript;
 		this.maxWorkers = maxWorkers;
 	}
 
 	/**
-	 * Creates and configures a new worker instance.
-	 * @private
-	 * @returns {Worker} Configured worker instance
-	 * @description Creates a new Web Worker with message and error handlers configured.
-	 * The worker is initialized with the specified worker script and module type.
+	 * Initializes the thread pool and ensures workers are ready.
+	 * @public
+	 * @returns {Promise<void>} Resolves when all initial workers are ready
+	 * @throws {Error} If initialization fails or times out
 	 */
-	private createWorker(): Worker {
-		const worker = new Worker(new URL("./worker.ts", import.meta.url), {
-			type: "module",
-		});
+	public async initialize(): Promise<void> {
+		console.log("Starting thread pool initialization...");
 
-		worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-			const { id, type, payload } = event.data;
+		const initializationPromises = [];
 
-			if (type === "RESULT" || type === "ERROR") {
-				this.handleWorkerComplete(worker, id, payload);
+		for (let i = 0; i < this.maxWorkers; i++) {
+			try {
+				const worker = new Worker(new URL(this.workerScript, import.meta.url), {
+					type: "module",
+				});
+
+				worker.onerror = (error) => {
+					console.error(`Worker ${i} error:`, error);
+				};
+
+				worker.onmessage = (event: MessageEvent<WorkerMessage<any>>) => {
+					const message = event.data;
+					const callback = this.callbacks.get(message.id);
+					if (!callback) {
+						console.warn(`No callback found for message ID: ${message.id}`);
+						return;
+					}
+
+					const [resolve, reject] = callback;
+
+					if (message.type === "RESULT") {
+						console.log(`Received RESULT for task ${message.id}`);
+						resolve(message.payload.result);
+					} else if (message.type === "ERROR") {
+						console.error(
+							`Received ERROR for task ${message.id}:`,
+							message.payload.error,
+						);
+						reject(new Error(message.payload.error));
+					}
+
+					this.callbacks.delete(message.id);
+					this.activeWorkers.delete(worker);
+					this.processNextTask();
+				};
+
+				this.workers.push(worker);
+
+				initializationPromises.push(
+					new Promise<void>((resolve, reject) => {
+						const timeout = setTimeout(() => {
+							reject(
+								new Error(
+									`Worker ${i} initialization timed out after 30 seconds`,
+								),
+							);
+						}, 30000);
+
+						const onReady = (event: MessageEvent<WorkerMessage<any>>) => {
+							if (event.data.type === "READY") {
+								clearTimeout(timeout);
+								worker.removeEventListener("message", onReady);
+								console.log(`Worker ${i} is READY`);
+								resolve();
+							}
+						};
+
+						worker.addEventListener("message", onReady);
+						worker.postMessage({ type: "INIT", id: crypto.randomUUID() });
+					}),
+				);
+			} catch (error) {
+				console.error(`Failed to create worker ${i}:`, error);
+				throw error;
 			}
-		};
-
-		worker.onerror = (error) => {
-			console.error("Worker error:", error);
-			this.handleWorkerError(worker, error);
-		};
-
-		return worker;
-	}
-
-	/**
-	 * Handles worker task completion.
-	 * @private
-	 * @param {Worker} worker - The worker that completed the task
-	 * @param {string} taskId - ID of the completed task
-	 * @param {WorkerResult} result - Result data from the worker
-	 * @description Processes worker completion by:
-	 * - Removing worker from active set
-	 * - Storing task result
-	 * - Resolving task promise
-	 * - Initiating next task processing
-	 */
-	private handleWorkerComplete(
-		worker: Worker,
-		taskId: string,
-		result: WorkerResult,
-	) {
-		this.activeWorkers.delete(worker);
-		this.results.set(taskId, result);
-
-		const callbacks = this.callbacks.get(taskId);
-		if (callbacks) {
-			const [resolve, reject] = callbacks;
-			if (result.error) {
-				reject(result.error);
-			} else {
-				resolve(result.result);
-			}
-			this.callbacks.delete(taskId);
 		}
 
-		this.processNextTask();
-	}
-
-	/**
-	 * Handles worker errors.
-	 * @private
-	 * @param {Worker} worker - The worker that encountered an error
-	 * @param {ErrorEvent} error - The error event
-	 * @description Handles worker errors by:
-	 * - Removing failed worker from active set
-	 * - Terminating the worker
-	 * - Cleaning up worker references
-	 * - Initiating next task processing
-	 */
-	private handleWorkerError(worker: Worker, error: ErrorEvent) {
-		this.activeWorkers.delete(worker);
-		worker.terminate();
-		const index = this.workers.indexOf(worker);
-		if (index !== -1) {
-			this.workers.splice(index, 1);
-		}
-		this.processNextTask();
+		await Promise.all(initializationPromises);
+		console.log(`Thread pool initialized with ${this.workers.length} workers`);
 	}
 
 	/**
@@ -151,35 +152,27 @@ export class ThreadPool {
 			return;
 		}
 
-		let worker: Worker | undefined;
-
-		// Reuse existing idle worker
-		for (const w of this.workers) {
-			if (!this.activeWorkers.has(w)) {
-				worker = w;
-				break;
-			}
+		if (this.activeWorkers.size >= this.maxWorkers) {
+			return;
 		}
 
-		// Create new worker if needed and possible
-		if (!worker && this.workers.length < this.maxWorkers) {
-			worker = this.createWorker();
-			this.workers.push(worker);
+		const task = this.taskQueue.shift();
+		if (!task) {
+			return;
 		}
 
-		if (worker) {
-			const task = this.taskQueue.shift();
-			if (task) {
-				this.activeWorkers.add(worker);
-				const message: WorkerMessage = {
-					id: task.id,
-					type: "TASK",
-					payload: task,
-					timestamp: Date.now(),
-				};
-				worker.postMessage(message);
-			}
+		const availableWorker = this.workers.find(
+			(w) => !this.activeWorkers.has(w),
+		);
+		if (!availableWorker) {
+			this.taskQueue.unshift(task);
+			return;
 		}
+
+		this.activeWorkers.add(availableWorker);
+		console.log(`Assigning task ${task.id} to a worker`);
+
+		availableWorker.postMessage(task);
 	}
 
 	/**
@@ -212,16 +205,23 @@ export class ThreadPool {
 	 * - Queues task and initiates processing
 	 * - Returns promise for task completion
 	 */
-	public async submitTask<T = any>(type: string, data: any): Promise<T> {
-		if (!this.isSerializable(data)) {
-			throw new Error(`Task data must be serializable. Type: ${type}`);
+	public async submitTask<T = any>(
+		type: "READY" | "RESULT" | "ERROR" | "TASK" | "STATUS" | "INIT",
+		url?: string,
+		data: any = {},
+	): Promise<T> {
+		if (type === "TASK" && !url) {
+			throw new Error("URL is required for TASK type.");
 		}
 
 		const task: WorkerTask = {
 			id: crypto.randomUUID(),
 			type,
+			...(type === "TASK" && { url }),
 			data,
 		};
+
+		console.log(`Submitting task: ${task.type} with ID: ${task.id}`);
 
 		return new Promise((resolve, reject) => {
 			this.callbacks.set(task.id, [resolve, reject]);
@@ -240,14 +240,26 @@ export class ThreadPool {
 	 * - Clears callback and result storage
 	 */
 	public shutdown() {
+		console.log("Shutting down thread pool...");
 		for (const worker of this.workers) {
 			worker.terminate();
 		}
 		this.workers = [];
-		this.activeWorkers.clear();
-		this.taskQueue = [];
 		this.callbacks.clear();
+		this.taskQueue = [];
+		this.activeWorkers.clear();
 		this.results.clear();
+		console.log("Thread pool shut down.");
+	}
+
+	/**
+	 * Checks if the thread pool has been initialized.
+	 * @public
+	 * @returns {boolean} True if workers are initialized, false otherwise
+	 * @description Returns true if workers are initialized, false otherwise
+	 */
+	public isInitialized(): boolean {
+		return this.workers.length > 0;
 	}
 
 	/**
@@ -278,5 +290,15 @@ export class ThreadPool {
 	 */
 	public getAllResults(): Map<string, WorkerResult> {
 		return new Map(this.results);
+	}
+
+	/**
+	 * Gets the number of workers in the pool.
+	 * @public
+	 * @returns {number} Number of workers
+	 * @description Returns the current count of workers in the thread pool
+	 */
+	public getWorkerCount(): number {
+		return this.workers.length;
 	}
 }

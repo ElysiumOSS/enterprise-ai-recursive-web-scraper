@@ -20,6 +20,7 @@
 ```shell
 npm i enterprise-ai-recursive-web-scraper
 ```
+
 ```ts
 import { greet } from "enterprise-ai-recursive-web-scraper";
 
@@ -27,6 +28,7 @@ greet("Hello, world! 💖");
 ```
 
 ## Contributors
+
 <!-- spellchecker: disable -->
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
