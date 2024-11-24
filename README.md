@@ -38,29 +38,60 @@
 
 ## 🚀 Quick Start
 
+To install the package, run:
+
 ```bash
-npm i enterprise-ai-recursive-web-scraper
+npm install enterprise-ai-recursive-web-scraper
 ```
 
-```typescript
-import { WebScraper } from "enterprise-ai-recursive-web-scraper";
+### Using the CLI
 
-async function main() {
-    const scraper = new WebScraper({
-        outputDir: "scraping_output",
-        verbose: true
-    });
+The `enterprise-ai-recursive-web-scraper` package includes a command-line interface (CLI) that you can use to perform web scraping tasks directly from the terminal.
 
-    const results = await scraper.scrapeWebsite("https://example.com");
-    console.log(results);
-}
+#### Installation
 
-main().catch(console.error);
+Ensure that the package is installed globally to use the CLI:
+
+```bash
+npm install -g enterprise-ai-recursive-web-scraper
 ```
+
+#### Running the CLI
+
+Once installed, you can use the `web-scraper` command to start scraping. Here’s a basic example of how to use it:
+
+```bash
+web-scraper --api-key YOUR_API_KEY --url https://example.com --output ./output
+```
+
+#### CLI Options
+
+- `-k, --api-key <key>`: **(Required)** Your Google Gemini API key.
+- `-u, --url <url>`: **(Required)** The URL of the website you want to scrape.
+- `-o, --output <directory>`: The directory where the scraped data will be saved. Default is `scraping_output`.
+- `-d, --depth <number>`: Maximum crawl depth. Default is `3`.
+- `-c, --concurrency <number>`: Concurrent scraping limit. Default is `5`.
+- `-t, --timeout <seconds>`: Request timeout in seconds. Default is `30`.
+- `-f, --format <type>`: Output format (`json`, `csv`, `markdown`). Default is `json`.
+- `--screenshot`: Capture screenshots of pages.
+- `--no-headless`: Run the browser in non-headless mode.
+- `--proxy <url>`: Use a proxy server.
+- `-v, --verbose`: Enable verbose logging.
+- `--config <path>`: Path to a configuration file.
+
+#### Example Command
+
+```bash
+web-scraper --api-key YOUR_API_KEY --url https://example.com --output ./output --depth 5 --concurrency 10 --format csv --verbose
+```
+
+This command will scrape the specified URL with a maximum depth of 5, using 10 concurrent requests, and save the output in CSV format in the `./output` directory with verbose logging enabled.
 
 ## 🔧 Advanced Usage
 
 ### Structured Data Extraction
+
+To extract structured data using a JSON schema, you can use the `JsonExtractionStrategy`:
 
 ```typescript
 import { WebScraper, JsonExtractionStrategy } from "enterprise-ai-recursive-web-scraper";
@@ -80,6 +111,8 @@ const scraper = new WebScraper({
 ```
 
 ### Custom Browser Session
+
+You can customize the browser session with specific configurations:
 
 ```typescript
 import { WebScraper } from "enterprise-ai-recursive-web-scraper";

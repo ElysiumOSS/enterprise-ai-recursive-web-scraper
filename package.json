@@ -13,12 +13,16 @@
 	},
 	"type": "module",
 	"main": "lib/cli.cjs",
-	"files": [
-		"lib/**/*",
-		"package.json",
-		"LICENSE.md",
-		"README.md"
-	],
+  "files": [
+    "lib/*.js",
+    "lib/*.cjs",
+    "lib/*.d.ts",
+    "lib/*.d.cts",
+    "lib/*.map",
+    "package.json",
+    "LICENSE.md",
+    "README.md"
+  ],
 	"scripts": {
 		"build": "bun run build:pre && tsup src/cli.ts src/index.ts --format esm,cjs --dts --outDir lib",
 		"build:pre": "bunx puppeteer browsers install chrome",
@@ -62,5 +66,17 @@
 	],
 	"bin": {
 		"web-scraper": "./lib/cli.cjs"
+	},
+	"exports": {
+		".": {
+			"require": "./lib/index.cjs",
+			"import": "./lib/index.js",
+			"types": "./lib/index.d.ts"
+		},
+		"./cli": {
+			"require": "./lib/cli.cjs",
+			"import": "./lib/cli.js",
+			"types": "./lib/cli.d.ts"
+		}
 	}
 }
