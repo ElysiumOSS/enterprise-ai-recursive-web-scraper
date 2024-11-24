@@ -1,6 +1,6 @@
 {
 	"name": "enterprise-ai-recursive-web-scraper",
-	"version": "1.0.0",
+	"version": "1.0.2",
 	"description": "AI powered, recursive, web-scraper utilizing Gemini models, Puppeteer, and Playwright",
 	"repository": {
 		"type": "git",
