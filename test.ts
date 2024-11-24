@@ -5,7 +5,7 @@ console.log("Created scraper instance");
 
 try {
 	console.log("Starting website scrape...");
-	const results = await scraper.scrapeWebsite("https://blog.mikeodnis.dev/beyond-static-creating-a-dynamic-developer-portfolio-with-nextjs-and-modern-web-tech");
+	const results = await scraper.scrapeWebsite("https://mikeodnis.dev");
 	console.log("Scrape completed:", results);
 } catch (error) {
 	console.error("Scrape failed:", {

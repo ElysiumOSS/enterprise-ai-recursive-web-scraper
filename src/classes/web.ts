@@ -149,6 +149,7 @@ import { genAI } from "../constants/gemini-settings.js";
 import { safetySettings } from "../constants/gemini-settings.js";
 import { ContentFilterManager } from "./scraper.js";
 import { ContentAnalyzer, PromptGenerator } from './content-analyzer.js';
+import natural from 'natural';
 
 /**
  * Represents the complete result of processing a single web page, including all generated artifacts
@@ -332,6 +333,7 @@ export class WebScraper {
 	private outputDir: string;
 	public readonly contentFilter: ContentFilterManager;
 	private baseUrl: string = '';
+	private sentimentAnalyzer: natural.SentimentAnalyzer;
 
 	/**
 	 * Creates a new WebScraper instance.
@@ -377,6 +379,10 @@ export class WebScraper {
 	constructor(outputDir: string = "scraping_output") {
 		this.outputDir = outputDir;
 		this.contentFilter = ContentFilterManager.getInstance();
+
+		// Initialize sentiment analyzer
+		const stemmer = natural.PorterStemmer;
+		this.sentimentAnalyzer = new natural.SentimentAnalyzer("English", stemmer, "afinn");
 	}
 
 	/**
@@ -904,6 +910,11 @@ export class WebScraper {
 		url: string,
 		fileExtension: string = '.txt'
 	): Promise<string> {
+		// For processed content, validate AI response
+		if (type === 'processed') {
+			content = await this.processAIResponse(content);
+		}
+
 		const urlObj = new URL(url);
 		
 		// Skip non-textual files and clean up the path
@@ -929,5 +940,113 @@ export class WebScraper {
 
 		await fs.writeFile(filePath, content, 'utf-8');
 		return filePath;
+	}
+
+	/**
+	 * Validates AI generated content for safety and sentiment
+	 * @private
+	 * @param {string} content - AI generated content to validate
+	 * @returns {Promise<{isValid: boolean, reason?: string}>}
+	 */
+	private async validateAIResponse(content: string): Promise<{isValid: boolean, reason?: string}> {
+		try {
+			// 1. Check for NSFW domains
+			const nsfwDomainCheck = await this.contentFilter.isNSFWDomain(content);
+			
+			// 2. Check for NSFW keywords in content
+			const nsfwKeywords = [
+				'porn', 'xxx', 'sex', 'adult', 'nude', 'naked', 'nsfw',
+				'escort', 'erotic', 'pussy', 'dick', 'cock', 'boob',
+				// Add more keywords as needed
+			];
+			
+			const containsNSFWKeywords = nsfwKeywords.some(keyword => 
+				content.toLowerCase().includes(keyword)
+			);
+
+			// 3. Check for suspicious patterns (URLs, file extensions)
+			const suspiciousPatterns = [
+				/\.(xxx|sex|porn|adult)/i,
+				/(escort|massage|dating)\s*services/i,
+				/over\s*18|adults?\s*only/i
+			];
+
+			const containsSuspiciousPatterns = suspiciousPatterns.some(pattern => 
+				pattern.test(content)
+			);
+
+			if (nsfwDomainCheck || containsNSFWKeywords || containsSuspiciousPatterns) {
+				return {
+					isValid: false,
+					reason: 'Content flagged as potentially NSFW'
+				};
+			}
+
+			// 4. Perform sentiment analysis
+			const words = content.toLowerCase().split(' ');
+			const sentimentScore = this.sentimentAnalyzer.getSentiment(words);
+
+			const NEGATIVE_THRESHOLD = -0.5;
+			const EXTREMELY_NEGATIVE_THRESHOLD = -0.8;
+
+			if (sentimentScore < EXTREMELY_NEGATIVE_THRESHOLD) {
+				return {
+					isValid: false,
+					reason: 'Content contains extremely negative sentiment'
+				};
+			}
+
+			if (sentimentScore < NEGATIVE_THRESHOLD) {
+				console.warn(`Warning: Content has negative sentiment score: ${sentimentScore}`);
+			}
+
+			// 5. Additional safety check using Gemini's safety settings
+			try {
+				const model = await genAI.getGenerativeModel({
+					model: "gemini-1.5-flash",
+					safetySettings
+				});
+
+				const safetyPrompt = `Please analyze if the following content is safe and appropriate (not NSFW). Respond with only "SAFE" or "UNSAFE": ${content.substring(0, 1000)}`;
+				const safetyCheck = await model.generateContent(safetyPrompt);
+				const safetyResponse = safetyCheck.response.text().toLowerCase();
+
+				if (safetyResponse.includes('unsafe')) {
+					return {
+						isValid: false,
+						reason: 'Content flagged as unsafe by AI safety check'
+					};
+				}
+			} catch (aiError) {
+				console.warn('AI safety check failed:', aiError);
+				// Continue with other checks if AI check fails
+			}
+
+			return { isValid: true };
+
+		} catch (error) {
+			console.error('Content validation failed:', error);
+			return {
+				isValid: false,
+				reason: 'Content validation failed'
+			};
+		}
+	}
+
+	/**
+	 * Process AI response with safety checks
+	 * @private
+	 * @param {string} aiResponse - Response from AI model
+	 * @returns {Promise<string>} Validated and processed response
+	 * @throws {Error} If content validation fails
+	 */
+	private async processAIResponse(aiResponse: string): Promise<string> {
+		const validation = await this.validateAIResponse(aiResponse);
+		
+		if (!validation.isValid) {
+			throw new Error(`AI response rejected: ${validation.reason}`);
+		}
+
+		return aiResponse;
 	}
 }

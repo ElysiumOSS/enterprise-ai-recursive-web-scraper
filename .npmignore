@@ -1,0 +1,11 @@
+.git/
+.github/
+node_modules/
+src/
+test/
+.env
+.gitignore
+.prettierrc
+.eslintrc
+tsconfig.json
+bun.lockb
