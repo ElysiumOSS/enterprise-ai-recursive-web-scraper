@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import chalk from 'chalk';
 import ora, { Ora } from 'ora';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -12,8 +11,12 @@ import prettyBytes from 'pretty-bytes';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
-// Use dynamic import for WebScraper class
+// Define types for dynamic imports
+type ChalkType = typeof import('chalk').default;
 type WebScraperType = typeof import('./classes/web.js').WebScraper;
+
+// Initialize variables for dynamically imported modules
+let chalk: ChalkType;
 let WebScraper: WebScraperType;
 
 dotenv.config();
@@ -57,7 +60,7 @@ class ScraperCLI {
     this.program
       .name('web-scraper')
       .description('AI-powered recursive web scraper with advanced features')
-      .version('1.0.0')
+      .version('1.0.4')
       .requiredOption('-k, --api-key <key>', 'Google Gemini API key')
       .requiredOption('-u, --url <url>', 'URL to scrape')
       .option('-o, --output <directory>', 'Output directory', 'scraping_output')
@@ -202,6 +205,10 @@ class ScraperCLI {
 
   async run() {
     try {
+      // Dynamically import chalk
+      const chalkModule = await import('chalk');
+      chalk = chalkModule.default;
+
       this.program.parse(process.argv);
       const options = this.program.opts();
 
@@ -259,12 +266,15 @@ class ScraperCLI {
       });
 
     } catch (error: unknown) {
-      this.spinner.fail(chalk.red('Scraping failed!'));
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (this.spinner) {
+        this.spinner.fail(chalk ? chalk.red('Scraping failed!') : 'Scraping failed!');
+      }
       logger.error('Fatal error', { 
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined
       });
-      console.error(chalk.red(`\nError: ${error instanceof Error ? error.message : String(error)}`));
+      console.error(chalk ? chalk.red(`\nError: ${errorMessage}`) : `\nError: ${errorMessage}`);
       process.exit(1);
     }
   }
