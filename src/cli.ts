@@ -3,7 +3,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora, { Ora } from 'ora';
-import { WebScraper } from './index.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs/promises';
@@ -12,6 +11,10 @@ import Table from 'cli-table3';
 import prettyBytes from 'pretty-bytes';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+
+// Use dynamic import for WebScraper class
+type WebScraperType = typeof import('./classes/web.js').WebScraper;
+let WebScraper: WebScraperType;
 
 dotenv.config();
 const __filename = fileURLToPath(new URL(import.meta.url).href);
@@ -215,6 +218,10 @@ class ScraperCLI {
       if (options.verbose) {
         logger.level = 'debug';
       }
+
+      // Dynamically import WebScraper
+      const { WebScraper: ImportedWebScraper } = await import('./classes/web.js');
+      WebScraper = ImportedWebScraper;
 
       // Initialize scraper with options
       const scraper = new WebScraper({
