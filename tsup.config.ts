@@ -4,18 +4,20 @@ export default defineConfig({
   entry: ['src/cli.ts', 'src/index.ts'],
   format: ['esm', 'cjs'],
   dts: true,
-  clean: true,
-  outDir: 'lib',
   splitting: false,
   sourcemap: true,
-  target: 'node20',
-  shims: true,
-  treeshake: true,
-  outExtension({ format }) {
-    return {
-      js: format === 'cjs' ? '.cjs' : '.js',
-    };
-  },
+  clean: true,
+  noExternal: [
+    'chalk',
+    'ora',
+    'cli-table3',
+    'commander',
+    'dotenv',
+    'inquirer',
+    'natural',
+    'pretty-bytes',
+    'winston'
+  ],
   esbuildOptions(options) {
     options.banner = {
       js: `
@@ -23,5 +25,5 @@ export default defineConfig({
         const require = createRequire(import.meta.url);
       `,
     };
-  },
+  }
 });

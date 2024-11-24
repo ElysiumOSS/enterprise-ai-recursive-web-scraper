@@ -24,7 +24,7 @@
     "README.md"
   ],
 	"scripts": {
-		"build": "bun run build:pre && tsup src/cli.ts src/index.ts --format esm,cjs --dts --outDir lib",
+		"build": "bun run build:pre && tsup",
 		"build:pre": "bunx puppeteer browsers install chrome",
 		"prepublishOnly": "bun run build",
 		"prepack": "bun run build"
