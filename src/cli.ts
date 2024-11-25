@@ -10,12 +10,11 @@ import Table from 'cli-table3';
 import prettyBytes from 'pretty-bytes';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { RateLimiter } from './classes/web.js';
 
-// Define types for dynamic imports
 type ChalkType = typeof import('chalk').default;
 type WebScraperType = typeof import('./classes/web.js').WebScraper;
 
-// Initialize variables for dynamically imported modules
 let chalk: ChalkType;
 let WebScraper: WebScraperType;
 
@@ -23,7 +22,6 @@ dotenv.config();
 const __filename = fileURLToPath(new URL(import.meta.url).href);
 const __dirname = dirname(__filename);
 
-// Configure logger
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -36,7 +34,6 @@ const logger = winston.createLogger({
   ]
 });
 
-// Add console transport if not in production
 if (process.env.NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
     format: winston.format.combine(
@@ -49,10 +46,12 @@ if (process.env.NODE_ENV !== 'production') {
 class ScraperCLI {
   private program: Command;
   private spinner: Ora;
+  private rateLimiter: RateLimiter;
 
   constructor() {
     this.program = new Command();
     this.spinner = ora();
+    this.rateLimiter = new RateLimiter(5, 1);
     this.configureProgram();
   }
 
@@ -72,7 +71,11 @@ class ScraperCLI {
       .option('--no-headless', 'Run browser in non-headless mode')
       .option('--proxy <url>', 'Use proxy server')
       .option('-v, --verbose', 'Enable verbose logging')
-      .option('--config <path>', 'Path to config file');
+      .option('--config <path>', 'Path to config file')
+      .option('-r, --rate-limit <number>', 'Rate limit (requests per second)', '5')
+      .option('--retry-attempts <number>', 'Number of retry attempts', '3')
+      .option('--retry-delay <number>', 'Delay between retries (ms)', '1000')
+      .option('--memory-limit <number>', 'Memory limit in MB', '1024');
   }
 
   async loadConfig(configPath: string) {
@@ -93,14 +96,12 @@ class ScraperCLI {
       timeout: options.timeout
     };
 
-    // Validate URL format
     try {
       new URL(requiredOptions.url);
     } catch (error) {
       throw new Error(`Invalid URL: ${requiredOptions.url}`);
     }
 
-    // Validate numeric values
     const depth = parseInt(requiredOptions.depth);
     if (isNaN(depth) || depth < 1) {
       throw new Error('Depth must be a positive number');
@@ -203,71 +204,122 @@ class ScraperCLI {
     ].join('\n');
   }
 
+  async withRetry<T>(
+    operation: () => Promise<T>,
+    options: { attempts: number; delay: number; name: string }
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= options.attempts; attempt++) {
+      try {
+        await this.rateLimiter.acquire();
+        return await operation();
+      } catch (error) {
+        if (attempt === options.attempts) throw error;
+        
+        const waitTime = options.delay * attempt;
+        this.spinner.text = chalk.yellow(
+          `Attempt ${attempt} failed for ${options.name}. Retrying in ${waitTime}ms...`
+        );
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+    throw new Error(`Failed after ${options.attempts} attempts`);
+  }
+
   async run() {
     try {
-      // Dynamically import chalk
       const chalkModule = await import('chalk');
       chalk = chalkModule.default;
 
       this.program.parse(process.argv);
       const options = this.program.opts();
 
-      // Load config file if specified
+      const memoryLimit = parseInt(options.memoryLimit) * 1024 * 1024;
+      process.setMaxListeners(memoryLimit);
+
       if (options.config) {
-        const configOptions = await this.loadConfig(options.config);
+        const configOptions = await this.withRetry(
+          () => this.loadConfig(options.config),
+          { attempts: 3, delay: 1000, name: 'config loading' }
+        );
         Object.assign(options, configOptions);
       }
 
       this.validateOptions(options);
       await this.ensureOutputDirectory(options.output);
 
-      // Configure verbose logging
       if (options.verbose) {
         logger.level = 'debug';
       }
 
+      const scraper = new (await import('./classes/web.js')).WebScraper({
+        ...options,
+        retryOptions: {
+          maxRetries: parseInt(options.retryAttempts),
+          retryDelay: parseInt(options.retryDelay)
+        }
+      });
 
-      const scraper = new (await import('./classes/web.js')).WebScraper(options);
-
-      // Start scraping
       this.spinner.start('Initializing scraper...');
-      logger.info('Starting scraping process', { url: options.url, options });
-
+      
       const startTime = Date.now();
       const results = await scraper.scrapeWebsite(options.url);
       const duration = Date.now() - startTime;
 
-      // Export results
+      this.spinner.text = 'Exporting results...';
       await this.exportResults(results, options.format, options.output);
 
-      // Display results
-      this.spinner.succeed('Scraping completed successfully!');
-      console.log('\nScraping Summary:');
-      console.log(this.createResultsTable(results));
-      console.log(`\nTotal time: ${duration / 1000}s`);
-      console.log(`Results exported to: ${options.output}`);
+      this.displaySummary(results, duration, options);
 
       logger.info('Scraping completed', {
         duration,
         totalUrls: results.size,
-        successCount: [...results.values()].filter(r => !r.error).length
+        successCount: [...results.values()].filter(r => !r.error).length,
+        memoryUsage: process.memoryUsage()
       });
 
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (this.spinner) {
-        this.spinner.fail(chalk ? chalk.red('Scraping failed!') : 'Scraping failed!');
-      }
-      logger.error('Fatal error', { 
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      console.error(chalk ? chalk.red(`\nError: ${errorMessage}`) : `\nError: ${errorMessage}`);
-      process.exit(1);
+      this.handleError(error);
     }
+  }
+
+  private displaySummary(results: Map<string, any>, duration: number, options: any) {
+    this.spinner.succeed('Scraping completed successfully!');
+    
+    console.log('\n📊 Scraping Summary:');
+    console.log(this.createResultsTable(results));
+    
+    const stats = this.calculateStats(results);
+    console.log('\n📈 Performance Metrics:');
+    console.log(`⏱️  Total time: ${(duration / 1000).toFixed(2)}s`);
+    console.log(`🎯 Success rate: ${stats.successRate.toFixed(2)}%`);
+    console.log(`📦 Total data processed: ${prettyBytes(stats.totalSize)}`);
+    console.log(`💾 Results exported to: ${options.output}`);
+  }
+
+  private calculateStats(results: Map<string, any>) {
+    const values = [...results.values()];
+    const successful = values.filter(r => !r.error);
+    
+    return {
+      successRate: (successful.length / values.length) * 100,
+      totalSize: values.reduce((sum, r) => sum + (r.contentSize || 0), 0),
+      avgProcessingTime: values.reduce((sum, r) => sum + (r.processingTime || 0), 0) / values.length
+    };
+  }
+
+  private handleError(error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (this.spinner) {
+      this.spinner.fail(chalk ? chalk.red('Scraping failed!') : 'Scraping failed!');
+    }
+    logger.error('Fatal error', { 
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    console.error(chalk ? chalk.red(`\nError: ${errorMessage}`) : `\nError: ${errorMessage}`);
+    process.exit(1);
   }
 }
 
-// Run CLI
 const cli = new ScraperCLI();
 cli.run();

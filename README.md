@@ -17,7 +17,10 @@
 
 ## ✨ Features
 
-* 🚀 **High Performance**: Blazing fast multi-threaded scraping with concurrent processing
+* 🚀 **High Performance**: 
+  - Blazing fast multi-threaded scraping with concurrent processing
+  - Smart rate limiting to prevent API throttling and server overload
+  - Automatic request queuing and retry mechanisms
 * 🤖 **AI-Powered**: Intelligent content extraction using Groq LLMs
 * 🌐 **Multi-Browser**: Support for Chromium, Firefox, and WebKit
 * 📊 **Smart Extraction**: 
@@ -26,6 +29,7 @@
   - Cosine similarity clustering for content deduplication
 * 🎯 **Advanced Capabilities**:
   - Recursive domain crawling with boundary respect
+  - Intelligent rate limiting with token bucket algorithm
   - Session management for complex multi-page flows
   - Custom JavaScript execution support
   - Enhanced screenshot capture with lazy-load detection
@@ -33,8 +37,9 @@
 * 🔒 **Enterprise Ready**:
   - Proxy support with authentication
   - Custom headers and user-agent configuration
-  - Comprehensive error handling
-  - Flexible timeout management
+  - Comprehensive error handling and retry mechanisms
+  - Flexible timeout and rate limit management
+  - Detailed logging and monitoring
 
 ## 🚀 Quick Start
 
@@ -66,28 +71,43 @@ web-scraper --api-key YOUR_API_KEY --url https://example.com --output ./output
 
 #### CLI Options
 
-- `-k, --api-key <key>`: **(Required)** Your Google Gemini API key.
-- `-u, --url <url>`: **(Required)** The URL of the website you want to scrape.
-- `-o, --output <directory>`: The directory where the scraped data will be saved. Default is `scraping_output`.
-- `-d, --depth <number>`: Maximum crawl depth. Default is `3`.
-- `-c, --concurrency <number>`: Concurrent scraping limit. Default is `5`.
-- `-t, --timeout <seconds>`: Request timeout in seconds. Default is `30`.
-- `-f, --format <type>`: Output format (`json`, `csv`, `markdown`). Default is `json`.
-- `--screenshot`: Capture screenshots of pages.
-- `--no-headless`: Run the browser in non-headless mode.
-- `--proxy <url>`: Use a proxy server.
-- `-v, --verbose`: Enable verbose logging.
-- `--config <path>`: Path to a configuration file.
+- `-k, --api-key <key>`: **(Required)** Your Google Gemini API key
+- `-u, --url <url>`: **(Required)** The URL of the website to scrape
+- `-o, --output <directory>`: Output directory for scraped data (default: `scraping_output`)
+- `-d, --depth <number>`: Maximum crawl depth (default: `3`)
+- `-c, --concurrency <number>`: Concurrent scraping limit (default: `5`)
+- `-r, --rate-limit <number>`: Requests per second (default: `5`)
+- `-t, --timeout <number>`: Request timeout in milliseconds (default: `30000`)
+- `-f, --format <type>`: Output format: json|csv|markdown (default: `json`)
+- `-v, --verbose`: Enable verbose logging
+- `--retry-attempts <number>`: Number of retry attempts (default: `3`)
+- `--retry-delay <number>`: Delay between retries in ms (default: `1000`)
 
-#### Example Command
+Example usage with rate limiting:
 
 ```bash
-web-scraper --api-key YOUR_API_KEY --url https://example.com --output ./output --depth 5 --concurrency 10 --format csv --verbose
+web-scraper --api-key YOUR_API_KEY --url https://example.com --output ./output \
+  --depth 5 --concurrency 10 --rate-limit 2 --retry-attempts 3 --format csv --verbose
 ```
 
-This command will scrape the specified URL with a maximum depth of 5, using 10 concurrent requests, and save the output in CSV format in the `./output` directory with verbose logging enabled.
-
 ## 🔧 Advanced Usage
+
+### Rate Limiting Configuration
+
+Configure rate limiting to respect server limits and prevent throttling:
+
+```typescript
+import { WebScraper, RateLimiter } from "enterprise-ai-recursive-web-scraper";
+
+const scraper = new WebScraper({
+    rateLimiter: new RateLimiter({
+        maxTokens: 5,      // Maximum number of tokens
+        refillRate: 1,     // Tokens refilled per second
+        retryAttempts: 3,  // Number of retry attempts
+        retryDelay: 1000   // Delay between retries (ms)
+    })
+});
+```
 
 ### Structured Data Extraction
 

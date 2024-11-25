@@ -71,7 +71,7 @@ const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000)
 	}
 };
 
-class RateLimiter {
+export class RateLimiter {
 	private tokens: number;
 	private readonly maxTokens: number;
 	private readonly refillRate: number;

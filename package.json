@@ -1,6 +1,6 @@
 {
 	"name": "enterprise-ai-recursive-web-scraper",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"description": "AI powered, recursive, web-scraper utilizing Gemini models, Puppeteer, and Playwright",
 	"repository": {
 		"type": "git",
@@ -27,7 +27,9 @@
 		"build": "bun run build:pre && tsup",
 		"build:pre": "bunx puppeteer browsers install chrome",
 		"prepublishOnly": "bun run build",
-		"prepack": "bun run build"
+		"prepack": "bun run build",
+		"pretest": "bun run build",
+		"test": "bun test"
 	},
 	"dependencies": {
 		"@google/generative-ai": "^0.21.0",
