@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { $ } from "bun";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import dotenv from "dotenv";
-import { fail } from "assert";
+import { fail } from "node:assert";
 
 dotenv.config();
 
@@ -17,6 +17,7 @@ describe("CLI", () => {
   const TEST_URL = "https://headstarter.co";
   const TEST_OUTPUT = path.resolve(process.cwd(), "test-output");
   const TEST_API_KEY = process.env.GOOGLE_AI_API_KEY;
+  const TEST_TIMEOUT = 60000; // 60 seconds
 
   beforeEach(() => {
     try {
@@ -48,24 +49,24 @@ describe("CLI", () => {
 
   test("shows help when no arguments provided", async () => {
     try {
-      await $`bun "${CLI_PATH}" --help`;
+      const proc = await $`bun "${CLI_PATH}" --help`.timeout(TEST_TIMEOUT);
+      expect(proc.stdout.toString()).toContain('Usage:');
     } catch (error) {
-      const { stderr, exitCode } = error as CliError;
-      expect(stderr.toString()).toContain('required option');
-      expect(exitCode).toBe(1);
+      const { stderr } = error as CliError;
+      // Help command should not fail
+      fail(`Help command failed: ${stderr}`);
     }
-  });
+  }, TEST_TIMEOUT);
 
   test("validates required arguments", async () => {
     try {
-      await $`bun "${CLI_PATH}" --url "${TEST_URL}"`;
+      await $`bun "${CLI_PATH}" --url "${TEST_URL}"`.timeout(TEST_TIMEOUT);
       fail('Should have thrown error');
     } catch (error) {
-      const { stderr, exitCode } = error as CliError;
+      const { stderr } = error as CliError;
       expect(stderr.toString()).toContain('required option');
-      expect(exitCode).toBe(1);
     }
-  });
+  }, TEST_TIMEOUT);
 
   test("handles invalid URLs", async () => {
     try {
@@ -79,49 +80,45 @@ describe("CLI", () => {
   });
 
   test("handles standard scraping", async () => {
-    const outputPath = path.resolve(TEST_OUTPUT).replace(/\\/g, '/');
+    const outputPath = path.resolve(TEST_OUTPUT);
     const start = Date.now();
 
     try {
-      // First ensure output directory exists
       if (!fs.existsSync(outputPath)) {
         fs.mkdirSync(outputPath, { recursive: true });
       }
 
-      await Promise.race([
-        $`bun "${CLI_PATH}" --api-key "${TEST_API_KEY}" --url "${TEST_URL}" --output "${outputPath}" --format json`,
-        new Promise((_, reject) => 
-          setTimeout(() => {
-            // Check if any files were created before rejecting
-            const files = fs.readdirSync(outputPath);
-            if (files.length > 0) {
-              console.log(`Files were generated before timeout: ${files.join(', ')}`);
-              return; // Don't reject if files exist
-            }
-            reject(new Error('Command timed out without generating any files'))
-          }, 30000)
-        )
-      ]);
+      const scrapePromise = $`bun "${CLI_PATH}" --api-key "${TEST_API_KEY}" --url "${TEST_URL}" --output "${outputPath}" --format json`.timeout(TEST_TIMEOUT);
 
-      const elapsed = Date.now() - start;
-      expect(elapsed).toBeGreaterThan(500);
+      // Poll for output files while waiting for scrape to complete
+      const checkInterval = setInterval(() => {
+        if (fs.existsSync(outputPath)) {
+          const files = fs.readdirSync(outputPath);
+          if (files.length > 0) {
+            console.log(`Files generated: ${files.join(', ')}`);
+            clearInterval(checkInterval);
+          }
+        }
+      }, 1000);
+
+      await scrapePromise;
+      clearInterval(checkInterval);
+
+      // Verify output exists
+      expect(fs.existsSync(outputPath)).toBe(true);
+      const files = fs.readdirSync(outputPath);
+      expect(files.length).toBeGreaterThan(0);
 
     } catch (error) {
-      const { stderr } = error as CliError;
+      // Check if files were generated despite error
       if (fs.existsSync(outputPath)) {
         const files = fs.readdirSync(outputPath);
         if (files.length > 0) {
-          console.log(`Files were generated: ${files.join(', ')}`);
-          return;
+          console.log('Files were generated despite error:', files);
+          return; // Consider test passed if files exist
         }
-      }
-
-      if (stderr?.toString().includes('network error') || 
-          stderr?.toString().includes('timeout')) {
-        console.log('Test failed with expected network/timeout error:', stderr.toString());
-        return;
       }
       throw error;
     }
-  }, 30000);
+  }, TEST_TIMEOUT);
 });

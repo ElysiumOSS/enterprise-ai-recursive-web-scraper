@@ -5,3 +5,4 @@ bun.lockb
 .env
 scraping_output
 *.log
+*.tgz
