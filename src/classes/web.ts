@@ -124,7 +124,43 @@ export class WebScraper {
 	private static readonly TIMEOUTS = {
 		navigation: 30000,
 		processing: 60000,
-		screenshot: 30000
+		screenshot: 30000,
+		browserLaunch: 120000,
+		retryDelay: 5000
+	};
+
+	private static readonly LAUNCH_CONFIG = {
+		headless: true,
+		args: [
+			'--no-sandbox',
+			'--disable-setuid-sandbox',
+			'--disable-dev-shm-usage',
+			'--disable-gpu',
+			'--disable-extensions',
+			'--disable-background-networking',
+			'--disable-background-timer-throttling',
+			'--disable-backgrounding-occluded-windows',
+			'--disable-breakpad',
+			'--disable-client-side-phishing-detection',
+			'--disable-component-extensions-with-background-pages',
+			'--disable-default-apps',
+			'--disable-features=TranslateUI,BlinkGenPropertyTrees',
+			'--disable-hang-monitor',
+			'--disable-ipc-flooding-protection',
+			'--disable-popup-blocking',
+			'--disable-prompt-on-repost',
+			'--disable-renderer-backgrounding',
+			'--disable-sync',
+			'--force-color-profile=srgb',
+			'--metrics-recording-only',
+			'--no-first-run',
+			'--password-store=basic',
+			'--use-mock-keychain',
+			'--window-size=1920,1080'
+		],
+		timeout: 120000,
+		retries: 5,
+		retryBackoff: true
 	};
 
 	constructor(config: ScraperConfig = {}) {
@@ -183,20 +219,112 @@ export class WebScraper {
 	private async initialize(): Promise<void> {
 		console.log('Initializing browser and output directory...');
 		await fs.mkdir(this.outputDir, { recursive: true });
-		this.browser = await chromium.launch({
-			headless: true,
-			args: [
-				'--no-sandbox',
-				'--disable-setuid-sandbox',
-				'--disable-dev-shm-usage',
-				'--disable-gpu'
-			]
-		});
-		console.log('Browser initialized.');
+		
+		let lastError: Error | null = null;
+		let retryDelay = WebScraper.LAUNCH_CONFIG.timeout / WebScraper.LAUNCH_CONFIG.retries;
+		
+		for (let attempt = 1; attempt <= WebScraper.LAUNCH_CONFIG.retries; attempt++) {
+			try {
+				console.log(`Browser launch attempt ${attempt}/${WebScraper.LAUNCH_CONFIG.retries}`);
+				
+				const cleanup = async () => {
+					if (this.browser) {
+						try {
+							await this.browser.close();
+						} catch (e) {
+							console.warn('Failed to close browser:', e);
+						}
+						this.browser = null;
+					}
+				};
+
+				const timeoutPromise = new Promise<never>((_, reject) => {
+					setTimeout(() => {
+						cleanup();
+						reject(new Error('Browser launch timeout'));
+					}, WebScraper.LAUNCH_CONFIG.timeout);
+				});
+
+				const browserPromise = chromium.launch({
+					headless: WebScraper.LAUNCH_CONFIG.headless,
+					args: WebScraper.LAUNCH_CONFIG.args,
+					timeout: WebScraper.LAUNCH_CONFIG.timeout,
+					env: {
+						...process.env,
+						NODE_OPTIONS: '--max-old-space-size=4096'
+					}
+				});
+
+				this.browser = await Promise.race([browserPromise, timeoutPromise]);
+				await this.browser.contexts();
+				
+				console.log('Browser successfully initialized.');
+				return;
+				
+			} catch (error) {
+				lastError = error instanceof Error ? error : new Error(String(error));
+				console.warn(`Browser launch attempt ${attempt} failed:`, lastError.message);
+				
+				if (attempt < WebScraper.LAUNCH_CONFIG.retries) {
+					if (WebScraper.LAUNCH_CONFIG.retryBackoff) {
+						retryDelay *= 1.5;
+					}
+					
+					console.log(`Waiting ${retryDelay/1000} seconds before retry...`);
+					await new Promise(resolve => setTimeout(resolve, retryDelay));
+				}
+				
+				await this.cleanup().catch(cleanupError => 
+					console.warn('Failed to cleanup browser:', cleanupError)
+				);
+			}
+		}
+		
+		throw new Error(
+			`Failed to launch browser after ${WebScraper.LAUNCH_CONFIG.retries} attempts. ` +
+			`Last error: ${lastError?.message}. ` +
+			'Please check system resources and network connectivity.'
+		);
+	}
+
+	private async ensureBrowser(): Promise<Browser> {
+		if (!this.browser) {
+			await this.initialize();
+		}
+		
+		if (!this.browser) {
+			throw new Error('Browser initialization failed');
+		}
+		
+		try {
+			await Promise.race([
+				this.browser.contexts(),
+				new Promise((_, reject) => 
+					setTimeout(() => reject(new Error('Browser health check timeout')), 5000)
+				)
+			]);
+			return this.browser;
+		} catch (error) {
+			console.warn('Browser became unresponsive, reinitializing...');
+			await this.cleanup();
+			await this.initialize();
+			
+			if (!this.browser) {
+				throw new Error('Browser reinitialization failed');
+			}
+			
+			return this.browser;
+		}
 	}
 
 	private async getPage(): Promise<Page> {
-		return this.pagePool.pop() ?? this.browser!.newPage();
+		const browser = await this.ensureBrowser();
+		const page = await browser.newPage();
+		
+		await page.setDefaultTimeout(WebScraper.TIMEOUTS.navigation);
+		await page.setDefaultNavigationTimeout(WebScraper.TIMEOUTS.navigation);
+		
+		return page;
 	}
 
 	private async releasePage(page: Page): Promise<void> {

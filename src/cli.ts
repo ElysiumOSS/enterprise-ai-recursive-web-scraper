@@ -15,6 +15,35 @@ import { RateLimiter } from './classes/web.js';
 type ChalkType = typeof import('chalk').default;
 type WebScraperType = typeof import('./classes/web.js').WebScraper;
 
+// Custom error types for better error handling
+class ConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigError';
+  }
+}
+
+class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+class FileSystemError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FileSystemError';
+  }
+}
+
+class ScrapingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScrapingError';
+  }
+}
+
 let chalk: ChalkType;
 let WebScraper: WebScraperType;
 
@@ -41,6 +70,21 @@ if (process.env.NODE_ENV !== 'production') {
       winston.format.simple()
     )
   }));
+}
+
+interface ScraperOptions {
+  url: string;
+  depth: string;
+  concurrency: string;
+  timeout: string;
+  output: string;
+  format: string;
+  apiKey: string;
+  verbose?: boolean;
+  config?: string;
+  retryAttempts: string;
+  retryDelay: string;
+  memoryLimit: string;
 }
 
 class ScraperCLI {
@@ -72,61 +116,65 @@ class ScraperCLI {
       .option('--proxy <url>', 'Use proxy server')
       .option('-v, --verbose', 'Enable verbose logging')
       .option('--config <path>', 'Path to config file')
-      .option('-r, --rate-limit <number>', 'Rate limit (requests per second)', '5')
       .option('--retry-attempts <number>', 'Number of retry attempts', '3')
       .option('--retry-delay <number>', 'Delay between retries (ms)', '1000')
-      .option('--memory-limit <number>', 'Memory limit in MB', '1024');
+      .option('--memory-limit <number>', 'Memory limit in MB', '1024')
+      .option('--max-tokens <number>', 'Maximum rate limit tokens', '5')
+      .option('--refill-rate <number>', 'Token refill rate per second', '1');
   }
 
-  async loadConfig(configPath: string) {
+  async loadConfig(configPath: string): Promise<Partial<ScraperOptions>> {
     try {
-      const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+      const configContent = await fs.readFile(configPath, 'utf8');
+      const config = JSON.parse(configContent) as Partial<ScraperOptions>;
       return config;
     } catch (error) {
-      logger.error(`Failed to load config file: ${error instanceof Error ? error.message : String(error)}`);
-      return {};
+      if (error instanceof Error) {
+        throw new ConfigError(`Failed to load config file: ${error.message}`);
+      }
+      throw new ConfigError('Unknown error while loading config file');
     }
   }
 
-  validateOptions(options: any) {
-    const requiredOptions = {
-      url: options.url,
-      depth: options.depth,
-      concurrency: options.concurrency,
-      timeout: options.timeout
-    };
+  validateOptions(options: Partial<ScraperOptions>): void {
+    if (!options.url) {
+      throw new ValidationError('URL is required');
+    }
 
     try {
-      new URL(requiredOptions.url);
+      new URL(options.url);
     } catch (error) {
-      throw new Error(`Invalid URL: ${requiredOptions.url}`);
+      throw new ValidationError(`Invalid URL: ${options.url}`);
     }
 
-    const depth = parseInt(requiredOptions.depth);
+    const depth = parseInt(options.depth || '3');
     if (isNaN(depth) || depth < 1) {
-      throw new Error('Depth must be a positive number');
+      throw new ValidationError('Depth must be a positive number');
     }
 
-    const concurrency = parseInt(requiredOptions.concurrency);
+    const concurrency = parseInt(options.concurrency || '5');
     if (isNaN(concurrency) || concurrency < 1) {
-      throw new Error('Concurrency must be a positive number');
+      throw new ValidationError('Concurrency must be a positive number');
     }
 
-    const timeout = parseInt(requiredOptions.timeout);
+    const timeout = parseInt(options.timeout || '30');
     if (isNaN(timeout) || timeout < 1) {
-      throw new Error('Timeout must be a positive number');
+      throw new ValidationError('Timeout must be a positive number');
     }
   }
 
-  async ensureOutputDirectory(directory: string) {
+  async ensureOutputDirectory(directory: string): Promise<void> {
     try {
       await fs.mkdir(directory, { recursive: true });
     } catch (error) {
-      throw new Error(`Failed to create output directory: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof Error) {
+        throw new FileSystemError(`Failed to create output directory: ${error.message}`);
+      }
+      throw new FileSystemError('Unknown error while creating output directory');
     }
   }
 
-  createResultsTable(results: Map<string, any>) {
+  createResultsTable(results: Map<string, any>): string {
     const table = new Table({
       head: ['URL', 'Status', 'Size', 'Processing Time', 'Links Found'],
       style: { head: ['cyan'] }
@@ -148,31 +196,38 @@ class ScraperCLI {
     results: Map<string, any>,
     format: string,
     outputDir: string
-  ) {
+  ): Promise<void> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `scraping-results-${timestamp}`;
 
-    switch (format.toLowerCase()) {
-      case 'json':
-        await fs.writeFile(
-          path.join(outputDir, `${filename}.json`),
-          JSON.stringify([...results], null, 2)
-        );
-        break;
-      case 'csv':
-        const csv = this.convertToCSV(results);
-        await fs.writeFile(path.join(outputDir, `${filename}.csv`), csv);
-        break;
-      case 'markdown':
-        const markdown = this.convertToMarkdown(results);
-        await fs.writeFile(path.join(outputDir, `${filename}.md`), markdown);
-        break;
-      default:
-        throw new Error(`Unsupported export format: ${format}`);
+    try {
+      switch (format.toLowerCase()) {
+        case 'json':
+          await fs.writeFile(
+            path.join(outputDir, `${filename}.json`),
+            JSON.stringify([...results], null, 2)
+          );
+          break;
+        case 'csv':
+          const csv = this.convertToCSV(results);
+          await fs.writeFile(path.join(outputDir, `${filename}.csv`), csv);
+          break;
+        case 'markdown':
+          const markdown = this.convertToMarkdown(results);
+          await fs.writeFile(path.join(outputDir, `${filename}.md`), markdown);
+          break;
+        default:
+          throw new ValidationError(`Unsupported export format: ${format}`);
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new FileSystemError(`Failed to export results: ${error.message}`);
+      }
+      throw new FileSystemError('Unknown error while exporting results');
     }
   }
 
-  convertToCSV(results: Map<string, any>) {
+  convertToCSV(results: Map<string, any>): string {
     const headers = ['URL', 'Status', 'Content Size', 'Processing Time', 'Links Found', 'Error'];
     const rows = [...results].map(([url, result]) => [
       url,
@@ -185,7 +240,7 @@ class ScraperCLI {
     return [headers, ...rows].map(row => row.join(',')).join('\n');
   }
 
-  convertToMarkdown(results: Map<string, any>) {
+  convertToMarkdown(results: Map<string, any>): string {
     const headers = ['URL', 'Status', 'Content Size', 'Processing Time', 'Links Found', 'Error'];
     const separator = headers.map(() => '---').join('|');
     const rows = [...results].map(([url, result]) => [
@@ -213,7 +268,12 @@ class ScraperCLI {
         await this.rateLimiter.acquire();
         return await operation();
       } catch (error) {
-        if (attempt === options.attempts) throw error;
+        if (attempt === options.attempts) {
+          if (error instanceof Error) {
+            throw new ScrapingError(`Operation ${options.name} failed: ${error.message}`);
+          }
+          throw new ScrapingError(`Operation ${options.name} failed with unknown error`);
+        }
         
         const waitTime = options.delay * attempt;
         this.spinner.text = chalk.yellow(
@@ -222,23 +282,24 @@ class ScraperCLI {
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
-    throw new Error(`Failed after ${options.attempts} attempts`);
+    throw new ScrapingError(`Failed after ${options.attempts} attempts`);
   }
 
-  async run() {
+  async run(): Promise<void> {
     try {
       const chalkModule = await import('chalk');
       chalk = chalkModule.default;
 
       this.program.parse(process.argv);
-      const options = this.program.opts();
+      const options = this.program.opts() as ScraperOptions;
 
       const memoryLimit = parseInt(options.memoryLimit) * 1024 * 1024;
       process.setMaxListeners(memoryLimit);
 
       if (options.config) {
+        const { config } = options;
         const configOptions = await this.withRetry(
-          () => this.loadConfig(options.config),
+          () => this.loadConfig(config),
           { attempts: 3, delay: 1000, name: 'config loading' }
         );
         Object.assign(options, configOptions);
@@ -252,11 +313,13 @@ class ScraperCLI {
       }
 
       const scraper = new (await import('./classes/web.js')).WebScraper({
-        ...options,
+        outputDir: options.output,
+        maxDepth: parseInt(options.depth),
+        maxConcurrentPages: parseInt(options.concurrency),
         retryOptions: {
           maxRetries: parseInt(options.retryAttempts),
           retryDelay: parseInt(options.retryDelay)
-        }
+        },
       });
 
       this.spinner.start('Initializing scraper...');
@@ -277,12 +340,12 @@ class ScraperCLI {
         memoryUsage: process.memoryUsage()
       });
 
-    } catch (error: unknown) {
+    } catch (error) {
       this.handleError(error);
     }
   }
 
-  private displaySummary(results: Map<string, any>, duration: number, options: any) {
+  private displaySummary(results: Map<string, any>, duration: number, options: ScraperOptions): void {
     this.spinner.succeed('Scraping completed successfully!');
     
     console.log('\n📊 Scraping Summary:');
@@ -296,7 +359,7 @@ class ScraperCLI {
     console.log(`💾 Results exported to: ${options.output}`);
   }
 
-  private calculateStats(results: Map<string, any>) {
+  private calculateStats(results: Map<string, any>): { successRate: number; totalSize: number; avgProcessingTime: number } {
     const values = [...results.values()];
     const successful = values.filter(r => !r.error);
     
@@ -307,14 +370,15 @@ class ScraperCLI {
     };
   }
 
-  private handleError(error: unknown) {
+  private handleError(error: unknown): never {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (this.spinner) {
       this.spinner.fail(chalk ? chalk.red('Scraping failed!') : 'Scraping failed!');
     }
     logger.error('Fatal error', { 
       error: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined
+      stack: error instanceof Error ? error.stack : undefined,
+      errorType: error instanceof Error ? error.name : 'Unknown'
     });
     console.error(chalk ? chalk.red(`\nError: ${errorMessage}`) : `\nError: ${errorMessage}`);
     process.exit(1);
@@ -322,4 +386,7 @@ class ScraperCLI {
 }
 
 const cli = new ScraperCLI();
-cli.run();
+cli.run().catch(error => {
+  console.error('Unhandled error:', error);
+  process.exit(1);
+});
