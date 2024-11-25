@@ -1,23 +1,23 @@
 /**
  * @fileoverview Content analysis and prompt generation system for web content processing
  * @module content-analyzer
- * @description Provides comprehensive functionality for analyzing web content structure and generating 
+ * @description Provides comprehensive functionality for analyzing web content structure and generating
  * context-aware prompts for LLM processing. The module includes two main classes:
  * - ContentAnalyzer: Analyzes web content to determine its context and characteristics
  * - PromptGenerator: Generates tailored prompts based on the analyzed content context
- * 
+ *
  * Key features:
  * - URL pattern matching and content signal detection
  * - Content type classification (article, product, profile, etc.)
  * - Structure analysis (narrative, analytical, technical, etc.)
  * - Context-aware prompt generation
  * - Flexible template system for different content types
- * 
+ *
  * @example
  * ```typescript
  * // Analyze content
  * const context = ContentAnalyzer.analyzeContent(url, htmlContent);
- * 
+ *
  * // Generate appropriate prompt
  * const prompt = PromptGenerator.generatePrompt(context, content);
  * ```
@@ -107,8 +107,8 @@ export class ContentAnalyzer {
         pageType: 'article',
         contentLength: 'detailed',
         structureType: 'narrative',
-        targetAudience: 'general'
-      }
+        targetAudience: 'general',
+      },
     },
     {
       patterns: [/\/product/, /\/item/, /\/shop/],
@@ -117,8 +117,8 @@ export class ContentAnalyzer {
         pageType: 'product',
         contentLength: 'standard',
         structureType: 'descriptive',
-        targetAudience: 'general'
-      }
+        targetAudience: 'general',
+      },
     },
     {
       patterns: [/\/category/, /\/department/, /\/section/],
@@ -127,8 +127,8 @@ export class ContentAnalyzer {
         pageType: 'category',
         contentLength: 'brief',
         structureType: 'analytical',
-        targetAudience: 'general'
-      }
+        targetAudience: 'general',
+      },
     },
     {
       patterns: [/\/profile/, /\/user/, /\/about/],
@@ -137,9 +137,9 @@ export class ContentAnalyzer {
         pageType: 'profile',
         contentLength: 'standard',
         structureType: 'descriptive',
-        targetAudience: 'general'
-      }
-    }
+        targetAudience: 'general',
+      },
+    },
   ];
 
   /**
@@ -158,21 +158,21 @@ export class ContentAnalyzer {
   private static getContentSignals(content: string): Set<string> {
     const signals = new Set<string>();
     const lowercaseContent = content.toLowerCase();
-    
+
     // Analyze document structure
     const hasHeaders = /<h[1-6][^>]*>.*?<\/h[1-6]>/i.test(content);
     const hasLists = /<[ou]l[^>]*>.*?<\/[ou]l>/i.test(content);
     const hasTables = /<table[^>]*>.*?<\/table>/i.test(content);
-    
+
     if (hasHeaders) signals.add('structured');
     if (hasLists) signals.add('list');
     if (hasTables) signals.add('data');
-    
+
     // Analyze content indicators
     if (lowercaseContent.includes('price') || /\$\d+/.test(content)) signals.add('price');
     if (lowercaseContent.includes('author') || /posted by/i.test(content)) signals.add('article');
     if (lowercaseContent.includes('profile') || /about me/i.test(content)) signals.add('bio');
-    
+
     return signals;
   }
 
@@ -189,7 +189,7 @@ export class ContentAnalyzer {
    * 3. Matching against predefined route patterns
    * 4. Determining the most appropriate content context
    * If no specific matches are found, returns a default general context.
-   * 
+   *
    * @example
    * ```typescript
    * const context = ContentAnalyzer.analyzeContent(
@@ -201,12 +201,12 @@ export class ContentAnalyzer {
   public static analyzeContent(url: string, content: string): ContentContext {
     const urlPath = new URL(url).pathname;
     const contentSignals = this.getContentSignals(content);
-    
+
     // Find matching route pattern
     for (const route of this.routePatterns) {
-      const matchesPattern = route.patterns.some(pattern => pattern.test(urlPath));
-      const matchesSignals = route.signals.some(signal => contentSignals.has(signal));
-      
+      const matchesPattern = route.patterns.some((pattern) => pattern.test(urlPath));
+      const matchesSignals = route.signals.some((signal) => contentSignals.has(signal));
+
       if (matchesPattern || matchesSignals) {
         return route.context;
       }
@@ -216,7 +216,7 @@ export class ContentAnalyzer {
       pageType: 'general',
       contentLength: 'standard',
       structureType: 'descriptive',
-      targetAudience: 'general'
+      targetAudience: 'general',
     };
   }
 }
@@ -256,7 +256,7 @@ export class PromptGenerator {
 - Preserve the author's voice and perspective
 
 Content: {content}`,
-      
+
       analytical: `Conduct a detailed analysis of this article:
 - Break down main arguments and supporting evidence
 - Identify methodology and data sources
@@ -265,7 +265,7 @@ Content: {content}`,
 - Highlight key statistical or research findings
 
 Content: {content}`,
-      
+
       technical: `Provide a technical breakdown of this article:
 - Extract core technical concepts and definitions
 - Document any procedures or methodologies
@@ -273,9 +273,9 @@ Content: {content}`,
 - Structure content into technical documentation format
 - Include relevant technical diagrams or formulas
 
-Content: {content}`
+Content: {content}`,
     },
-    
+
     product: {
       descriptive: `Create a comprehensive product description:
 - Extract key features and specifications
@@ -285,7 +285,7 @@ Content: {content}`
 - Structure content for easy scanning
 
 Content: {content}`,
-      
+
       technical: `Generate a technical product analysis:
 - Document detailed specifications
 - Analyze performance metrics
@@ -293,9 +293,9 @@ Content: {content}`,
 - Evaluate technical capabilities
 - Structure as technical documentation
 
-Content: {content}`
+Content: {content}`,
     },
-    
+
     profile: {
       narrative: `Create a professional profile summary:
 - Extract key career highlights and achievements
@@ -305,7 +305,7 @@ Content: {content}`
 - Highlight unique professional qualities
 
 Content: {content}`,
-      
+
       descriptive: `Generate a detailed professional overview:
 - Summarize professional background
 - List key qualifications and certifications
@@ -313,8 +313,8 @@ Content: {content}`,
 - Highlight notable accomplishments
 - Structure as a professional bio
 
-Content: {content}`
-    }
+Content: {content}`,
+    },
   };
 
   /**
@@ -329,7 +329,7 @@ Content: {content}`
    * 2. Choosing structure-specific variation
    * 3. Inserting content into template
    * 4. Falling back to default prompt if no specific template exists
-   * 
+   *
    * @example
    * ```typescript
    * const prompt = PromptGenerator.generatePrompt(
@@ -341,7 +341,7 @@ Content: {content}`
   public static generatePrompt(context: ContentContext, content: string): string {
     const { pageType, structureType } = context;
     const templates = this.promptTemplates[pageType as keyof typeof this.promptTemplates];
-    
+
     if (!templates) {
       return this.getDefaultPrompt(content);
     }

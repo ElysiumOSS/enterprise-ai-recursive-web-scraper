@@ -1,1 +1,1 @@
-export * from "./nsfw.js";
+export * from './nsfw.js';

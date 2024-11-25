@@ -1,20 +1,20 @@
 export interface WorkerMessage<T = any> {
-	id: string;
-	type: "TASK" | "RESULT" | "ERROR" | "STATUS" | "READY" | "INIT";
-	payload: T;
-	timestamp: number;
+  id: string;
+  type: 'TASK' | 'RESULT' | 'ERROR' | 'STATUS' | 'READY' | 'INIT';
+  payload: T;
+  timestamp: number;
 }
 
 export interface WorkerTask {
-	id: string;
-	type: "TASK" | "RESULT" | "ERROR" | "STATUS" | "READY" | "INIT";
-	url?: string;
-	data?: any;
+  id: string;
+  type: 'TASK' | 'RESULT' | 'ERROR' | 'STATUS' | 'READY' | 'INIT';
+  url?: string;
+  data?: any;
 }
 
 export interface TrieNode {
-	children: { [key: string]: TrieNode };
-	isEndOfWord: boolean;
+  children: { [key: string]: TrieNode };
+  isEndOfWord: boolean;
 }
 
 export interface ContentContext {
@@ -25,13 +25,13 @@ export interface ContentContext {
 }
 
 export interface RouteAnalysis {
-	patterns: RegExp[];
-	signals: string[];
-	context: ContentContext;
+  patterns: RegExp[];
+  signals: string[];
+  context: ContentContext;
 }
 
 export interface CodeBlock {
-	language: string;
-	code: string;
-	lineNumbers?: boolean;
+  language: string;
+  code: string;
+  lineNumbers?: boolean;
 }

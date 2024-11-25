@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
-import ora, { Ora } from 'ora';
-import dotenv from 'dotenv';
-import path from 'node:path';
 import fs from 'node:fs/promises';
-import winston from 'winston';
-import Table from 'cli-table3';
-import prettyBytes from 'pretty-bytes';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import Table from 'cli-table3';
+import { Command } from 'commander';
+import dotenv from 'dotenv';
+import ora, { type Ora } from 'ora';
+import prettyBytes from 'pretty-bytes';
+import winston from 'winston';
 import { RateLimiter } from './classes/web.js';
 
 type ChalkType = typeof import('chalk').default;
@@ -67,23 +67,19 @@ const __dirname = dirname(__filename);
 
 const logger = winston.createLogger({
   level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
+  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
   transports: [
     new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' })
-  ]
+    new winston.transports.File({ filename: 'combined.log' }),
+  ],
 });
 
 if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    )
-  }));
+  logger.add(
+    new winston.transports.Console({
+      format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
+    }),
+  );
 }
 
 class ScraperCLI {
@@ -151,7 +147,9 @@ class ScraperCLI {
       const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
       return config;
     } catch (error) {
-      logger.error(`Failed to load config file: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(
+        `Failed to load config file: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return {};
     }
   }
@@ -161,7 +159,7 @@ class ScraperCLI {
       url: options.url,
       depth: options.depth,
       concurrency: options.concurrency,
-      timeout: options.timeout
+      timeout: options.timeout,
     };
 
     try {
@@ -190,7 +188,9 @@ class ScraperCLI {
     try {
       await fs.mkdir(directory, { recursive: true });
     } catch (error) {
-      throw new Error(`Failed to create output directory: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to create output directory: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -201,7 +201,7 @@ class ScraperCLI {
 
     const table = new Table({
       head: ['URL', 'Status', 'Size', 'Processing Time', 'Links Found'],
-      style: { head: ['cyan'] }
+      style: { head: ['cyan'] },
     });
 
     for (const [url, result] of results.entries()) {
@@ -224,7 +224,7 @@ class ScraperCLI {
       case 'json':
         await fs.writeFile(
           path.join(outputDir, `${filename}.json`),
-          JSON.stringify([...results], null, 2)
+          JSON.stringify([...results], null, 2),
         );
         break;
       case 'csv': {
@@ -250,9 +250,9 @@ class ScraperCLI {
       result.contentSize || '',
       result.processingTime || '',
       result.foundLinks?.length || '',
-      result.error || ''
+      result.error || '',
     ]);
-    return [headers, ...rows].map(row => row.join(',')).join('\n');
+    return [headers, ...rows].map((row) => row.join(',')).join('\n');
   }
 
   convertToMarkdown(results: Map<string, any>) {
@@ -264,19 +264,15 @@ class ScraperCLI {
       result.contentSize ? prettyBytes(result.contentSize) : '-',
       result.processingTime ? `${result.processingTime}ms` : '-',
       result.foundLinks?.length || '-',
-      result.error || '-'
+      result.error || '-',
     ]);
 
-    return [
-      headers.join('|'),
-      separator,
-      ...rows.map(row => row.join('|'))
-    ].join('\n');
+    return [headers.join('|'), separator, ...rows.map((row) => row.join('|'))].join('\n');
   }
 
   private async withRetry<T>(
     operation: () => Promise<T>,
-    options: { attempts: number; delay: number; name: string }
+    options: { attempts: number; delay: number; name: string },
   ): Promise<T> {
     if (!chalk) {
       throw new Error('Chalk is not initialized');
@@ -288,12 +284,12 @@ class ScraperCLI {
         return await operation();
       } catch (error) {
         if (attempt === options.attempts) throw error;
-        
+
         const waitTime = options.delay * attempt;
         this.spinner.text = chalk.yellow(
-          `Attempt ${attempt} failed for ${options.name}. Retrying in ${waitTime}ms...`
+          `Attempt ${attempt} failed for ${options.name}. Retrying in ${waitTime}ms...`,
         );
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
     throw new Error(`Failed after ${options.attempts} attempts`);
@@ -307,14 +303,15 @@ class ScraperCLI {
       this.program.parse(process.argv);
       const options = this.program.opts();
 
-      const memoryLimit = parseInt(options.memoryLimit) * 1024 * 1024;
+      const memoryLimit = Number.parseInt(options.memoryLimit) * 1024 * 1024;
       process.setMaxListeners(memoryLimit);
 
       if (options.config) {
-        const configOptions = await this.withRetry(
-          () => this.loadConfig(options.config),
-          { attempts: 3, delay: 1000, name: 'config loading' }
-        );
+        const configOptions = await this.withRetry(() => this.loadConfig(options.config), {
+          attempts: 3,
+          delay: 1000,
+          name: 'config loading',
+        });
         Object.assign(options, configOptions);
       }
 
@@ -328,9 +325,9 @@ class ScraperCLI {
       const scraper = new (await import('./classes/web.js')).WebScraper({
         ...options,
         retryOptions: {
-          maxRetries: parseInt(options.retryAttempts),
-          retryDelay: parseInt(options.retryDelay)
-        }
+          maxRetries: Number.parseInt(options.retryAttempts),
+          retryDelay: Number.parseInt(options.retryDelay),
+        },
       });
 
       this.spinner.start('Initializing scraper...');
@@ -347,25 +344,28 @@ class ScraperCLI {
       logger.info('Scraping completed', {
         duration,
         totalUrls: results.size,
-        successCount: [...results.values()].filter(r => !r.error).length,
-        memoryUsage: process.memoryUsage()
+        successCount: [...results.values()].filter((r) => !r.error).length,
+        memoryUsage: process.memoryUsage(),
       });
-
     } catch (error: unknown) {
       this.handleError(error);
     }
   }
 
-  private displaySummary(results: Map<string, any>, duration: number, options: ScraperOptions): void {
+  private displaySummary(
+    results: Map<string, any>,
+    duration: number,
+    options: ScraperOptions,
+  ): void {
     if (!chalk) {
       throw new Error('Chalk is not initialized');
     }
 
     this.spinner.succeed('Scraping completed successfully!');
-    
+
     console.log('\n📊 Scraping Summary:');
     console.log(this.createResultsTable(results));
-    
+
     const stats = this.calculateStats(results);
     console.log('\n📈 Performance Metrics:');
     console.log(`⏱️  Total time: ${(duration / 1000).toFixed(2)}s`);
@@ -376,12 +376,13 @@ class ScraperCLI {
 
   private calculateStats(results: Map<string, any>) {
     const values = [...results.values()];
-    const successful = values.filter(r => !r.error);
+    const successful = values.filter((r) => !r.error);
 
     return {
       successRate: (successful.length / values.length) * 100,
       totalSize: values.reduce((sum, r) => sum + (r.contentSize || 0), 0),
-      avgProcessingTime: values.reduce((sum, r) => sum + (r.processingTime || 0), 0) / values.length
+      avgProcessingTime:
+        values.reduce((sum, r) => sum + (r.processingTime || 0), 0) / values.length,
     };
   }
 
@@ -395,12 +396,12 @@ class ScraperCLI {
     if (this.spinner) {
       this.spinner.fail(chalk.red('Scraping failed!'));
     }
-    
-    logger.error('Fatal error', { 
+
+    logger.error('Fatal error', {
       error: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined
+      stack: error instanceof Error ? error.stack : undefined,
     });
-    
+
     console.error(chalk.red(`\nError: ${errorMessage}`));
     process.exit(1);
   }

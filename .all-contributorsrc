@@ -23,9 +23,7 @@
   ],
   "contributorsPerLine": 7,
   "contributorsSortAlphabetically": true,
-  "files": [
-    "README.md"
-  ],
+  "files": ["README.md"],
   "imageSize": 100,
   "projectName": "enterprise-ai-recursive-web-scraper",
   "projectOwner": "WomB0ComB0",

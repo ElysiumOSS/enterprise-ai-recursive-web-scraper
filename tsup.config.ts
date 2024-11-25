@@ -16,7 +16,7 @@ export default defineConfig({
     'inquirer',
     'natural',
     'pretty-bytes',
-    'winston'
+    'winston',
   ],
   esbuildOptions(options) {
     options.banner = {
@@ -25,5 +25,5 @@ export default defineConfig({
         const require = createRequire(import.meta.url);
       `,
     };
-  }
+  },
 });

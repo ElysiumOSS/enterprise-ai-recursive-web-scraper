@@ -2,6 +2,15 @@
 	"name": "enterprise-ai-recursive-web-scraper",
 	"version": "1.0.5",
 	"description": "AI powered, recursive, web-scraper utilizing Gemini models, Puppeteer, and Playwright",
+	"keywords": [
+		"web-scraper",
+		"ai",
+		"gemini",
+		"puppeteer",
+		"playwright",
+		"typescript",
+		"cli"
+	],
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/WomB0ComB0/enterprise-ai-recursive-web-scraper"
@@ -12,7 +21,22 @@
 		"email": "airwolf635@gmail.com"
 	},
 	"type": "module",
+	"exports": {
+		".": {
+			"require": "./lib/index.cjs",
+			"import": "./lib/index.js",
+			"types": "./lib/index.d.ts"
+		},
+		"./cli": {
+			"require": "./lib/cli.cjs",
+			"import": "./lib/cli.js",
+			"types": "./lib/cli.d.ts"
+		}
+	},
 	"main": "lib/cli.cjs",
+	"bin": {
+		"web-scraper": "./lib/cli.cjs"
+	},
 	"files": [
 		"lib/*.js",
 		"lib/*.cjs",
@@ -26,12 +50,14 @@
 	"scripts": {
 		"build": "bun run build:pre && tsup",
 		"build:pre": "bunx puppeteer browsers install chrome",
-		"prepublishOnly": "bun run build",
 		"prepack": "bun run build",
+		"prepublishOnly": "bun run build",
+		"lint": "bunx biome check --write ./ || true",
 		"pretest": "bun run build",
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@biomejs/biome": "1.9.4",
 		"@google/generative-ai": "^0.21.0",
 		"async-sema": "^3.1.1",
 		"bottleneck": "^2.19.5",
@@ -59,29 +85,5 @@
 	},
 	"engines": {
 		"node": ">=20.12.2"
-	},
-	"keywords": [
-		"web-scraper",
-		"ai",
-		"gemini",
-		"puppeteer",
-		"playwright",
-		"typescript",
-		"cli"
-	],
-	"bin": {
-		"web-scraper": "./lib/cli.cjs"
-	},
-	"exports": {
-		".": {
-			"require": "./lib/index.cjs",
-			"import": "./lib/index.js",
-			"types": "./lib/index.d.ts"
-		},
-		"./cli": {
-			"require": "./lib/cli.cjs",
-			"import": "./lib/cli.js",
-			"types": "./lib/cli.d.ts"
-		}
 	}
 }
