@@ -226,20 +226,8 @@ class ScraperCLI {
         logger.level = 'debug';
       }
 
-      // Dynamically import WebScraper
-      const { WebScraper: ImportedWebScraper } = await import('./classes/web.js');
-      WebScraper = ImportedWebScraper;
 
-      // Initialize scraper with options
-      const scraper = new WebScraper({
-        outputDir: options.output,
-        maxDepth: parseInt(options.depth),
-        concurrency: parseInt(options.concurrency),
-        timeout: parseInt(options.timeout) * 1000,
-        headless: options.headless !== false,
-        screenshot: options.screenshot,
-        proxy: options.proxy
-      } as any);
+      const scraper = new (await import('./classes/web.js')).WebScraper(options);
 
       // Start scraping
       this.spinner.start('Initializing scraper...');

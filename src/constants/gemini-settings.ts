@@ -9,6 +9,7 @@ import {
 	GoogleGenerativeAI,
 	HarmBlockThreshold,
 	HarmCategory,
+	type ModelParams
 } from "@google/generative-ai";
 import dotenv from "dotenv";
 
@@ -20,7 +21,9 @@ dotenv.config();
  * @constant {string}
  * @description Specifies the Gemini 1.5 Flash model, optimized for fast inference
  */
-export const model = "gemini-1.5-flash";
+export const gemini_model: ModelParams = {
+	model: "gemini-1.5-pro",
+};
 
 /**
  * Google AI API key loaded from environment variables
