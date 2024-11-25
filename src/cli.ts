@@ -12,8 +12,54 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { RateLimiter } from './classes/web.js';
 
-let chalk;
-let WebScraper;
+type ChalkType = typeof import('chalk').default;
+type WebScraperType = typeof import('./classes/web.js').WebScraper;
+
+interface ScraperOptions {
+  url: string;
+  depth: string;
+  concurrency: string;
+  timeout: string;
+  output: string;
+  format: string;
+  apiKey: string;
+  verbose?: boolean;
+  config?: string;
+  retryAttempts: string;
+  retryDelay: string;
+  memoryLimit: string;
+}
+
+class ConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigError';
+  }
+}
+
+class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+class FileSystemError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FileSystemError';
+  }
+}
+
+class ScrapingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScrapingError';
+  }
+}
+
+let chalk: ChalkType;
+let WebScraper: WebScraperType;
 
 dotenv.config();
 const __filename = fileURLToPath(new URL(import.meta.url).href);
@@ -41,9 +87,9 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 class ScraperCLI {
-  program;
-  spinner;
-  rateLimiter;
+  private program: Command;
+  private spinner: Ora;
+  private rateLimiter: RateLimiter;
 
   constructor() {
     this.program = new Command();
@@ -61,7 +107,7 @@ class ScraperCLI {
     process.on('SIGTERM', () => {
       console.log('\nReceived SIGTERM. Cleaning up...');
       this.cleanup();
-      process.exit(0); 
+      process.exit(0);
     });
 
     process.on('unhandledRejection', (error) => {
@@ -100,7 +146,7 @@ class ScraperCLI {
       .option('--memory-limit <number>', 'Memory limit in MB', '1024');
   }
 
-  async loadConfig(configPath) {
+  async loadConfig(configPath: string) {
     try {
       const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
       return config;
@@ -110,7 +156,7 @@ class ScraperCLI {
     }
   }
 
-  validateOptions(options) {
+  validateOptions(options: ScraperOptions) {
     const requiredOptions = {
       url: options.url,
       depth: options.depth,
@@ -140,7 +186,7 @@ class ScraperCLI {
     }
   }
 
-  async ensureOutputDirectory(directory) {
+  async ensureOutputDirectory(directory: string) {
     try {
       await fs.mkdir(directory, { recursive: true });
     } catch (error) {
@@ -148,7 +194,11 @@ class ScraperCLI {
     }
   }
 
-  createResultsTable(results) {
+  private createResultsTable(results: Map<string, any>): string {
+    if (!chalk) {
+      throw new Error('Chalk is not initialized');
+    }
+
     const table = new Table({
       head: ['URL', 'Status', 'Size', 'Processing Time', 'Links Found'],
       style: { head: ['cyan'] }
@@ -166,7 +216,7 @@ class ScraperCLI {
     return table.toString();
   }
 
-  async exportResults(results, format, outputDir) {
+  async exportResults(results: Map<string, any>, format: string, outputDir: string) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `scraping-results-${timestamp}`;
 
@@ -192,7 +242,7 @@ class ScraperCLI {
     }
   }
 
-  convertToCSV(results) {
+  convertToCSV(results: Map<string, any>) {
     const headers = ['URL', 'Status', 'Content Size', 'Processing Time', 'Links Found', 'Error'];
     const rows = [...results].map(([url, result]) => [
       url,
@@ -205,8 +255,7 @@ class ScraperCLI {
     return [headers, ...rows].map(row => row.join(',')).join('\n');
   }
 
-  convertToMarkdown(results) {
-    const headers = [': Map<string, any>) {
+  convertToMarkdown(results: Map<string, any>) {
     const headers = ['URL', 'Status', 'Content Size', 'Processing Time', 'Links Found', 'Error'];
     const separator = headers.map(() => '---').join('|');
     const rows = [...results].map(([url, result]) => [
@@ -217,7 +266,7 @@ class ScraperCLI {
       result.foundLinks?.length || '-',
       result.error || '-'
     ]);
-    
+
     return [
       headers.join('|'),
       separator,
@@ -225,10 +274,14 @@ class ScraperCLI {
     ].join('\n');
   }
 
-  async withRetry<T>(
+  private async withRetry<T>(
     operation: () => Promise<T>,
     options: { attempts: number; delay: number; name: string }
   ): Promise<T> {
+    if (!chalk) {
+      throw new Error('Chalk is not initialized');
+    }
+
     for (let attempt = 1; attempt <= options.attempts; attempt++) {
       try {
         await this.rateLimiter.acquire();
@@ -265,7 +318,7 @@ class ScraperCLI {
         Object.assign(options, configOptions);
       }
 
-      this.validateOptions(options);
+      this.validateOptions(options as ScraperOptions);
       await this.ensureOutputDirectory(options.output);
 
       if (options.verbose) {
@@ -281,7 +334,7 @@ class ScraperCLI {
       });
 
       this.spinner.start('Initializing scraper...');
-      
+
       const startTime = Date.now();
       const results = await scraper.scrapeWebsite(options.url);
       const duration = Date.now() - startTime;
@@ -289,7 +342,7 @@ class ScraperCLI {
       this.spinner.text = 'Exporting results...';
       await this.exportResults(results, options.format, options.output);
 
-      this.displaySummary(results, duration, options);
+      this.displaySummary(results, duration, options as ScraperOptions);
 
       logger.info('Scraping completed', {
         duration,
@@ -303,7 +356,11 @@ class ScraperCLI {
     }
   }
 
-  private displaySummary(results: Map<string, any>, duration: number, options: any) {
+  private displaySummary(results: Map<string, any>, duration: number, options: ScraperOptions): void {
+    if (!chalk) {
+      throw new Error('Chalk is not initialized');
+    }
+
     this.spinner.succeed('Scraping completed successfully!');
     
     console.log('\n📊 Scraping Summary:');
@@ -320,7 +377,7 @@ class ScraperCLI {
   private calculateStats(results: Map<string, any>) {
     const values = [...results.values()];
     const successful = values.filter(r => !r.error);
-    
+
     return {
       successRate: (successful.length / values.length) * 100,
       totalSize: values.reduce((sum, r) => sum + (r.contentSize || 0), 0),
@@ -328,16 +385,23 @@ class ScraperCLI {
     };
   }
 
-  private handleError(error: unknown) {
+  private handleError(error: unknown): never {
+    if (!chalk) {
+      console.error('\nError:', error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (this.spinner) {
-      this.spinner.fail(chalk ? chalk.red('Scraping failed!') : 'Scraping failed!');
+      this.spinner.fail(chalk.red('Scraping failed!'));
     }
+    
     logger.error('Fatal error', { 
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined
     });
-    console.error(chalk ? chalk.red(`\nError: ${errorMessage}`) : `\nError: ${errorMessage}`);
+    
+    console.error(chalk.red(`\nError: ${errorMessage}`));
     process.exit(1);
   }
 }

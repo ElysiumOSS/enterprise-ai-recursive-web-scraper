@@ -17,7 +17,7 @@ describe("CLI", () => {
   const TEST_URL = "https://headstarter.co";
   const TEST_OUTPUT = path.resolve(process.cwd(), "test-output");
   const TEST_API_KEY = process.env.GOOGLE_AI_API_KEY;
-  const TEST_TIMEOUT = 60000; // 60 seconds
+  const TEST_TIMEOUT = 60000;
 
   beforeEach(() => {
     try {
@@ -49,18 +49,17 @@ describe("CLI", () => {
 
   test("shows help when no arguments provided", async () => {
     try {
-      const proc = await $`bun "${CLI_PATH}" --help`.timeout(TEST_TIMEOUT);
+      const proc = await $`bun "${CLI_PATH}" --help`;
       expect(proc.stdout.toString()).toContain('Usage:');
     } catch (error) {
       const { stderr } = error as CliError;
-      // Help command should not fail
       fail(`Help command failed: ${stderr}`);
     }
   }, TEST_TIMEOUT);
 
   test("validates required arguments", async () => {
     try {
-      await $`bun "${CLI_PATH}" --url "${TEST_URL}"`.timeout(TEST_TIMEOUT);
+      await $`bun "${CLI_PATH}" --url "${TEST_URL}"`;
       fail('Should have thrown error');
     } catch (error) {
       const { stderr } = error as CliError;
@@ -88,9 +87,8 @@ describe("CLI", () => {
         fs.mkdirSync(outputPath, { recursive: true });
       }
 
-      const scrapePromise = $`bun "${CLI_PATH}" --api-key "${TEST_API_KEY}" --url "${TEST_URL}" --output "${outputPath}" --format json`.timeout(TEST_TIMEOUT);
+      const scrapePromise = $`bun "${CLI_PATH}" --api-key "${TEST_API_KEY}" --url "${TEST_URL}" --output "${outputPath}" --format json`.then((s) => setTimeout(() => s, TEST_TIMEOUT));
 
-      // Poll for output files while waiting for scrape to complete
       const checkInterval = setInterval(() => {
         if (fs.existsSync(outputPath)) {
           const files = fs.readdirSync(outputPath);
@@ -104,18 +102,16 @@ describe("CLI", () => {
       await scrapePromise;
       clearInterval(checkInterval);
 
-      // Verify output exists
       expect(fs.existsSync(outputPath)).toBe(true);
       const files = fs.readdirSync(outputPath);
       expect(files.length).toBeGreaterThan(0);
 
     } catch (error) {
-      // Check if files were generated despite error
       if (fs.existsSync(outputPath)) {
         const files = fs.readdirSync(outputPath);
         if (files.length > 0) {
           console.log('Files were generated despite error:', files);
-          return; // Consider test passed if files exist
+          return;
         }
       }
       throw error;

@@ -1,5 +1,6 @@
 coverage/
 lib/
+dist/
 node_modules/
 bun.lockb
 .env
