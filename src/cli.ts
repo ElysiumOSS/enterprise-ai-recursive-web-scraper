@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+import { createRequire } from 'module';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { dirname } from 'node:path';
@@ -11,6 +11,8 @@ import ora, { type Ora } from 'ora';
 import prettyBytes from 'pretty-bytes';
 import winston from 'winston';
 import { RateLimiter } from './classes/web.js';
+
+const require = createRequire(import.meta.url);
 
 type ChalkType = typeof import('chalk').default;
 type WebScraperType = typeof import('./classes/web.js').WebScraper;
