@@ -1,12 +1,60 @@
+/**
+ * @fileoverview Content validation system for ensuring content safety and appropriateness
+ * @module content-validator
+ * @description Provides comprehensive content validation through multiple approaches:
+ * - Pattern matching for suspicious content
+ * - Keyword combination analysis
+ * - Sentiment analysis
+ * - AI-powered safety checks
+ * - Domain restriction validation
+ */
+
 import { gemini_model } from '../constants/gemini-settings.js';
 import { ContentFilter } from './scraper.js';
 
+/**
+ * Validates and analyzes content for safety and appropriateness
+ * @class ContentValidator
+ * @description Implements a multi-layered content validation system using:
+ * - Regular expression pattern matching
+ * - Keyword combination detection
+ * - Sentiment analysis scoring
+ * - AI model safety verification
+ * - Domain restriction checking
+ * 
+ * The validator uses multiple approaches to provide comprehensive content safety analysis:
+ * 1. Pattern matching for suspicious content patterns
+ * 2. Keyword combination detection for potentially unsafe content
+ * 3. Sentiment analysis to detect extremely negative content
+ * 4. AI model verification for content safety
+ * 5. Domain restriction validation against known unsafe domains
+ */
 export class ContentValidator {
+  /** Content filtering instance for domain checks */
   private readonly contentFilter: ContentFilter;
+  
+  /** Sentiment analysis implementation */
   private readonly sentimentAnalyzer: any;
+  
+  /** Threshold for negative sentiment content */
   private readonly NEGATIVE_THRESHOLD = -0.7;
+  
+  /** Threshold for extremely negative sentiment content */
   private readonly EXTREMELY_NEGATIVE_THRESHOLD = -0.9;
 
+  /**
+   * Regular expressions for detecting suspicious content patterns
+   * @private
+   * @readonly
+   * @type {RegExp[]}
+   * @description Patterns detect:
+   * - Adult/NSFW domain patterns
+   * - Onion/dark web URLs
+   * - Adult service advertisements
+   * - Age-restricted content markers
+   * - Suspicious transaction patterns
+   * - Cryptocurrency payment patterns
+   */
   private readonly SUSPICIOUS_PATTERNS = [
     /\b(?:www\.)?[a-z0-9-]+\.(?:xxx|adult|porn)\b/i,
     /\.onion\b/i,
@@ -16,6 +64,17 @@ export class ContentValidator {
     /(?:crypto|bitcoin|payment)\s*(?:for|to)\s*(?:content|service)/i,
   ];
 
+  /**
+   * Keyword combinations that indicate potentially unsafe content
+   * @private
+   * @readonly
+   * @type {string[][]}
+   * @description Arrays of keyword combinations that may indicate:
+   * - Private content transactions
+   * - Content-for-payment schemes
+   * - Cryptocurrency transactions
+   * - Content trading arrangements
+   */
   private readonly KEYWORD_COMBINATIONS = [
     ['private', 'show', 'payment'],
     ['send', 'pic', 'money'],
@@ -24,6 +83,13 @@ export class ContentValidator {
     ['crypto', 'content', 'private'],
   ];
 
+  /**
+   * Creates a new ContentValidator instance
+   * @constructor
+   * @param {any} sentimentAnalyzer - Sentiment analysis implementation
+   * @param {any} genAI - AI model interface for safety checks
+   * @param {any} safetySettings - Safety settings for AI model
+   */
   constructor(
     sentimentAnalyzer: any,
     private readonly genAI: any,
@@ -34,9 +100,21 @@ export class ContentValidator {
   }
 
   /**
-   * Validates if content is safe and appropriate
-   * @param content Content to validate
-   * @returns Validation result with reason if invalid
+   * Validates content safety and appropriateness
+   * @async
+   * @param {string} content - Content to validate
+   * @returns {Promise<{isValid: boolean, reason?: string, flags?: string[]}>} Validation result containing:
+   * - isValid: Whether content passed all safety checks
+   * - reason: Human readable explanation if content is invalid
+   * - flags: Array of specific safety flags triggered
+   * @throws {Error} If validation process fails
+   * @description Performs comprehensive content validation:
+   * 1. Checks for empty/invalid content
+   * 2. Validates against restricted domains
+   * 3. Checks for suspicious patterns
+   * 4. Analyzes keyword combinations
+   * 5. Performs sentiment analysis
+   * 6. Runs AI safety verification
    */
   public async validateAIResponse(content: string): Promise<{
     isValid: boolean;
@@ -126,6 +204,16 @@ export class ContentValidator {
     }
   }
 
+  /**
+   * Checks if content context is suspicious
+   * @private
+   * @param {string} context - Content context to analyze
+   * @returns {boolean} True if context matches suspicious patterns
+   * @description Analyzes content context for:
+   * - Payment/money requirement patterns
+   * - Private/secret content patterns
+   * - Adult/explicit content markers
+   */
   private isContextSuspicious(context: string): boolean {
     const suspiciousContextPatterns = [
       /(?:payment|money|crypto)\s+(?:required|needed|only)/i,
@@ -137,8 +225,12 @@ export class ContentValidator {
   }
 
   /**
-   * Constructs a human-readable reason from flags
+   * Constructs human-readable reason from validation flags
    * @private
+   * @param {string[]} flags - Array of validation flags
+   * @returns {string} Concatenated human-readable reason string
+   * @description Maps validation flags to readable descriptions and
+   * combines them into a semicolon-separated string
    */
   private constructReason(flags: string[]): string {
     const reasons = {

@@ -23,25 +23,21 @@
 	"type": "module",
 	"exports": {
 		".": {
-			"require": "./lib/index.cjs",
 			"import": "./lib/index.js",
 			"types": "./lib/index.d.ts"
 		},
 		"./cli": {
-			"require": "./lib/cli.cjs",
 			"import": "./lib/cli.js",
 			"types": "./lib/cli.d.ts"
 		}
 	},
-	"main": "lib/cli.cjs",
+	"main": "./lib/cli.js",
 	"bin": {
-		"web-scraper": "./lib/cli.cjs"
+		"web-scraper": "./lib/cli.js"
 	},
 	"files": [
 		"lib/*.js",
-		"lib/*.cjs",
 		"lib/*.d.ts",
-		"lib/*.d.cts",
 		"lib/*.map",
 		"package.json",
 		"LICENSE.md",
@@ -51,6 +47,8 @@
 		"build": "bun run build:pre && tsup",
 		"build:pre": "bunx puppeteer browsers install chrome",
 		"prepack": "bun run build",
+		"start": "bun run cli",
+		"cli": "bun lib/cli.js",
 		"prepublishOnly": "bun run build",
 		"lint": "bunx biome check --write ./ || true",
 		"pretest": "bun run build",

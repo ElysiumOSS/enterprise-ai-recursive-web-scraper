@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Web scraping and content filtering functionality
+ * @module scraper
+ * @description Provides classes and utilities for safely scraping web content while filtering 
+ * restricted/inappropriate content. Key components:
+ * - ContentFilter: Singleton class for filtering restricted domains and content
+ * - PageExtractor: Helper class for extracting text and code blocks from web pages
+ * - scrape(): Main scraping function that orchestrates the process
+ */
+
 import type { Browser, Page, PuppeteerLaunchOptions } from 'puppeteer';
 import puppeteer from 'puppeteer-extra';
 import { PuppeteerExtraPluginAdblocker } from 'puppeteer-extra-plugin-adblocker';
@@ -8,6 +18,10 @@ const browser = puppeteer
   .use(StealthPlugin())
   .use(new PuppeteerExtraPluginAdblocker({ blockTrackers: true }));
 
+/**
+ * Default Puppeteer browser launch options
+ * @constant {PuppeteerLaunchOptions}
+ */
 const BROWSER_OPTIONS: PuppeteerLaunchOptions = {
   headless: true,
   args: [
@@ -20,6 +34,13 @@ const BROWSER_OPTIONS: PuppeteerLaunchOptions = {
   timeout: 30000,
 };
 
+/**
+ * Patterns used to identify restricted/inappropriate content
+ * @constant {Object}
+ * @property {RegExp} TLD - Matches restricted top-level domains
+ * @property {RegExp} SUBDOMAIN - Matches restricted subdomains
+ * @property {RegExp[]} CONTENT - Array of patterns matching restricted content
+ */
 const RESTRICTED_PATTERNS = {
   TLD: /\.(xxx|sex|adult|porn)$/i,
   SUBDOMAIN: /^(?:porn|xxx|adult|sex)[-.]/i,
@@ -30,6 +51,10 @@ const RESTRICTED_PATTERNS = {
   ],
 };
 
+/**
+ * Singleton class for filtering restricted content and domains
+ * @class ContentFilter
+ */
 export class ContentFilter {
   private static instance: ContentFilter;
   private restrictedDomains: Set<string>;
@@ -38,6 +63,10 @@ export class ContentFilter {
     this.restrictedDomains = new Set();
   }
 
+  /**
+   * Gets the singleton instance of ContentFilter
+   * @returns {ContentFilter} The singleton instance
+   */
   static getInstance(): ContentFilter {
     if (!this.instance) {
       this.instance = new ContentFilter();
@@ -45,6 +74,10 @@ export class ContentFilter {
     return this.instance;
   }
 
+  /**
+   * Initializes the content filter by loading restricted domain data
+   * @throws {Error} If domain data fails to load
+   */
   async initialize(): Promise<void> {
     try {
       const { nsfw } = await import('../data/index.js');
@@ -55,6 +88,12 @@ export class ContentFilter {
     }
   }
 
+  /**
+   * Normalizes a domain string by removing protocol, www, and path
+   * @param {string} url - URL to normalize
+   * @returns {string} Normalized domain
+   * @private
+   */
   private normalizeDomain(url: string): string {
     return url
       .toLowerCase()
@@ -62,6 +101,11 @@ export class ContentFilter {
       .split('/')[0];
   }
 
+  /**
+   * Checks if a URL is restricted based on domain patterns
+   * @param {string} url - URL to check
+   * @returns {boolean} True if restricted, false otherwise
+   */
   isRestricted(url: string): boolean {
     const domain = this.normalizeDomain(url);
     return (
@@ -71,6 +115,11 @@ export class ContentFilter {
     );
   }
 
+  /**
+   * Filters restricted content from text
+   * @param {string} text - Text to filter
+   * @returns {string} Filtered text with restricted content removed
+   */
   filterText(text: string): string {
     let filtered = text;
     RESTRICTED_PATTERNS.CONTENT.forEach((pattern) => {
@@ -80,7 +129,16 @@ export class ContentFilter {
   }
 }
 
+/**
+ * Helper class for extracting content from web pages
+ * @class PageExtractor
+ */
 class PageExtractor {
+  /**
+   * Extracts text and code blocks from a page
+   * @param {Page} page - Puppeteer page to extract from
+   * @returns {Promise<{texts: string[], codeBlocks: CodeBlock[]}>} Extracted content
+   */
   static async extract(page: Page): Promise<{
     texts: string[];
     codeBlocks: CodeBlock[];
@@ -136,6 +194,21 @@ class PageExtractor {
   }
 }
 
+/**
+ * Main scraping function that safely extracts content from a URL
+ * @param {string} url - URL to scrape
+ * @returns {Promise<{filteredTexts?: string[], error?: string}>} Scraped and filtered content or error
+ * @throws {Error} If URL is invalid or scraping fails
+ * @example
+ * ```typescript
+ * const result = await scrape('https://example.com');
+ * if (result.error) {
+ *   console.error(result.error);
+ * } else {
+ *   console.log(result.filteredTexts);
+ * }
+ * ```
+ */
 export async function scrape(url: string): Promise<{
   filteredTexts?: string[];
   error?: string;

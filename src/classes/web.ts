@@ -1,3 +1,52 @@
+/**
+ * @fileoverview Web scraping system for extracting, processing and analyzing web content
+ * @module web-scraper
+ * @description Provides comprehensive web scraping functionality through:
+ * - Automated browser control with Playwright
+ * - Concurrent page processing with rate limiting
+ * - Content extraction and filtering
+ * - LLM-based content processing
+ * - Screenshot capture
+ * - Risk analysis and metrics
+ * - File system storage
+ * - Graceful shutdown handling
+ * 
+ * Key features:
+ * - Configurable concurrency and rate limiting
+ * - Recursive link following with depth control
+ * - Content validation and filtering
+ * - AI-powered content processing
+ * - Screenshot capture and storage
+ * - Risk assessment and metrics
+ * - Caching with LRU implementation
+ * - Robust error handling and retries
+ * - Graceful shutdown with reporting
+ * 
+ * The system implements a robust scraping workflow:
+ * 1. Browser Control
+ *    - Automated browser management
+ *    - Page pool for resource efficiency
+ *    - Navigation timeout handling
+ * 
+ * 2. Content Processing
+ *    - HTML content extraction
+ *    - Text filtering and cleaning
+ *    - LLM-based processing
+ *    - Risk assessment
+ * 
+ * 3. Resource Management
+ *    - Rate limiting
+ *    - Concurrent page processing
+ *    - Memory efficient caching
+ *    - File system storage
+ * 
+ * 4. Error Handling
+ *    - Retry mechanisms
+ *    - Timeout management
+ *    - Graceful degradation
+ *    - Detailed error reporting
+ */
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Sema } from 'async-sema';
@@ -9,6 +58,15 @@ import { ContentAnalyzer, PromptGenerator } from './content-analyzer.js';
 import { ContentValidator } from './content-validator.js';
 import { ContentFilter, scrape } from './scraper.js';
 
+/**
+ * Risk metrics for analyzed content
+ * @interface RiskMetrics
+ * @description Defines quantitative risk assessments for content across multiple dimensions
+ * @property {number} securityScore - Overall security assessment score (0-100)
+ * @property {number} contentRisk - Content-based risk assessment score (0-100)
+ * @property {number} behaviorRisk - Behavioral risk assessment score (0-100)
+ * @property {number} technicalRisk - Technical implementation risk score (0-100)
+ */
 interface RiskMetrics {
   securityScore: number;
   contentRisk: number;
@@ -16,6 +74,19 @@ interface RiskMetrics {
   technicalRisk: number;
 }
 
+/**
+ * Result data for processed pages
+ * @interface PageResult
+ * @description Contains processing results and metadata for scraped pages
+ * @property {string} url - Source URL of the processed page
+ * @property {string} contentPath - File path to stored raw content
+ * @property {string} processedContentPath - File path to processed/analyzed content
+ * @property {string} screenshot - File path to page screenshot
+ * @property {string} [error] - Error message if processing failed
+ * @property {number} timestamp - Processing timestamp
+ * @property {RiskLevel} [riskLevel] - Assessed risk level
+ * @property {RiskMetrics} [riskMetrics] - Detailed risk metrics
+ */
 interface PageResult {
   url: string;
   contentPath: string;
@@ -27,6 +98,11 @@ interface PageResult {
   riskMetrics?: RiskMetrics;
 }
 
+/**
+ * Risk level classifications
+ * @enum {string}
+ * @description Defines risk level categories for content assessment
+ */
 enum RiskLevel {
   LOW = 'LOW',
   MEDIUM = 'MEDIUM',
@@ -34,6 +110,17 @@ enum RiskLevel {
   CRITICAL = 'CRITICAL',
 }
 
+/**
+ * Scraper configuration options
+ * @interface ScraperConfig
+ * @description Configuration parameters for scraper behavior and limits
+ * @property {string} [outputDir] - Directory for storing results
+ * @property {number} [maxConcurrentPages] - Maximum concurrent page processes
+ * @property {number} [maxDepth] - Maximum link following depth
+ * @property {Object} [screenshotOptions] - Screenshot capture configuration
+ * @property {Object} [retryOptions] - Retry behavior configuration
+ * @property {Object} [cacheOptions] - Result caching configuration
+ */
 interface ScraperConfig {
   outputDir?: string;
   maxConcurrentPages?: number;
@@ -53,8 +140,25 @@ interface ScraperConfig {
   };
 }
 
+/**
+ * Delays execution for specified milliseconds
+ * @function delay
+ * @param {number} ms - Milliseconds to delay
+ * @returns {Promise<void>} Promise that resolves after delay
+ */
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Retries function execution with exponential backoff
+ * @async
+ * @function withRetry
+ * @template T
+ * @param {function(): Promise<T>} fn - Function to retry
+ * @param {number} [retries=3] - Maximum retry attempts
+ * @param {number} [baseDelay=1000] - Base delay between retries
+ * @returns {Promise<T>} Result of successful execution
+ * @throws {Error} Last error after all retries exhausted
+ */
 const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000): Promise<T> => {
   try {
     return await fn();
@@ -68,12 +172,23 @@ const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000)
   }
 };
 
+/**
+ * Token bucket rate limiter implementation
+ * @class RateLimiter
+ * @description Implements token bucket algorithm for rate limiting requests
+ */
 export class RateLimiter {
   private tokens: number;
   private readonly maxTokens: number;
   private readonly refillRate: number;
   private lastRefill: number;
 
+  /**
+   * Creates rate limiter instance
+   * @constructor
+   * @param {number} maxTokens - Maximum tokens in bucket
+   * @param {number} refillRate - Token refill rate per second
+   */
   constructor(maxTokens: number, refillRate: number) {
     this.tokens = maxTokens;
     this.maxTokens = maxTokens;
@@ -81,6 +196,12 @@ export class RateLimiter {
     this.lastRefill = Date.now();
   }
 
+  /**
+   * Acquires token for request
+   * @async
+   * @method acquire
+   * @returns {Promise<void>} Resolves when token acquired
+   */
   async acquire(): Promise<void> {
     await this.refill();
     if (this.tokens <= 0) {
@@ -91,6 +212,13 @@ export class RateLimiter {
     this.tokens--;
   }
 
+  /**
+   * Refills token bucket
+   * @private
+   * @async
+   * @method refill
+   * @returns {Promise<void>}
+   */
   private async refill(): Promise<void> {
     const now = Date.now();
     const timePassed = now - this.lastRefill;
@@ -100,6 +228,37 @@ export class RateLimiter {
   }
 }
 
+/**
+ * WebScraper class for crawling and scraping web content with advanced features
+ * @class WebScraper
+ * @description A comprehensive web scraping solution that handles browser automation, content processing,
+ * rate limiting, and data persistence. Features include:
+ * - Configurable concurrent page processing
+ * - Automatic retry mechanisms
+ * - Content validation and filtering
+ * - Screenshot capture
+ * - LLM-based content processing
+ * - Graceful shutdown handling
+ * - Caching with LRU implementation
+ * - Sentiment analysis
+ * - Rate limiting
+ * @property {Browser | null} browser - Playwright browser instance
+ * @property {LRUCache<string, PageResult>} results - Cache storing processed page results
+ * @property {Set<string>} processedUrls - Set of URLs that have been processed
+ * @property {string} outputDir - Directory for storing scraping outputs
+ * @property {number} maxConcurrentPages - Maximum number of concurrent page processes
+ * @property {ContentFilter} contentFilter - Content filtering instance
+ * @property {ContentValidator} validator - Content validation instance
+ * @property {natural.SentimentAnalyzer} sentimentAnalyzer - Natural language sentiment analyzer
+ * @property {string} baseUrl - Base URL of the website being scraped
+ * @property {number} maxDepth - Maximum crawl depth
+ * @property {Sema} semaphore - Semaphore for controlling concurrent operations
+ * @property {boolean} isShuttingDown - Flag indicating shutdown status
+ * @property {Page[]} pagePool - Pool of reusable browser pages
+ * @property {Map<string, Promise<PageResult>>} resultPromises - Map of pending page results
+ * @property {Map<string, NodeJS.Timeout>} timeouts - Map of operation timeouts
+ * @property {RateLimiter} rateLimiter - Rate limiter instance
+ */
 export class WebScraper {
   private browser: Browser | null = null;
   private readonly results: LRUCache<string, PageResult>;
@@ -118,6 +277,17 @@ export class WebScraper {
   private readonly timeouts = new Map<string, NodeJS.Timeout>();
   private readonly rateLimiter: RateLimiter;
 
+  /**
+   * Timeout configurations in milliseconds
+   * @readonly
+   * @static
+   * @property {Object} TIMEOUTS
+   * @property {number} TIMEOUTS.navigation - Page navigation timeout
+   * @property {number} TIMEOUTS.processing - Page processing timeout
+   * @property {number} TIMEOUTS.screenshot - Screenshot capture timeout
+   * @property {number} TIMEOUTS.browserLaunch - Browser launch timeout
+   * @property {number} TIMEOUTS.retryDelay - Delay between retries
+   */
   private static readonly TIMEOUTS = {
     navigation: 30000,
     processing: 60000,
@@ -126,6 +296,17 @@ export class WebScraper {
     retryDelay: 5000,
   };
 
+  /**
+   * Browser launch configuration
+   * @readonly
+   * @static
+   * @property {Object} LAUNCH_CONFIG
+   * @property {boolean} LAUNCH_CONFIG.headless - Run browser in headless mode
+   * @property {string[]} LAUNCH_CONFIG.args - Browser launch arguments
+   * @property {number} LAUNCH_CONFIG.timeout - Launch timeout
+   * @property {number} LAUNCH_CONFIG.retries - Number of launch retries
+   * @property {boolean} LAUNCH_CONFIG.retryBackoff - Enable exponential backoff for retries
+   */
   private static readonly LAUNCH_CONFIG = {
     headless: true,
     args: [
@@ -160,6 +341,17 @@ export class WebScraper {
     retryBackoff: true,
   };
 
+  /**
+   * Creates a new WebScraper instance
+   * @constructor
+   * @param {ScraperConfig} [config={}] - Scraper configuration options
+   * @param {string} [config.outputDir='scraping_output'] - Output directory path
+   * @param {number} [config.maxConcurrentPages=5] - Maximum concurrent pages
+   * @param {number} [config.maxDepth=3] - Maximum crawl depth
+   * @param {Object} [config.cacheOptions] - LRU cache options
+   * @param {number} [config.cacheOptions.max=1000] - Maximum cache size
+   * @param {number} [config.cacheOptions.ttl=3600000] - Cache TTL in milliseconds
+   */
   constructor(config: ScraperConfig = {}) {
     this.outputDir = config.outputDir ?? 'scraping_output';
     this.maxConcurrentPages = config.maxConcurrentPages ?? 5;
@@ -189,6 +381,13 @@ export class WebScraper {
     process.on('SIGTERM', () => this.handleShutdown());
   }
 
+  /**
+   * Scrapes a website starting from the given URL
+   * @async
+   * @param {string} url - Starting URL to scrape
+   * @returns {Promise<Map<string, PageResult>>} Map of processed URLs and their results
+   * @throws {Error} If URL is invalid or scraping fails
+   */
   public async scrapeWebsite(url: string): Promise<Map<string, PageResult>> {
     console.log('Starting scrape for website:', url);
     if (!this.isValidUrl(url)) {
@@ -209,6 +408,13 @@ export class WebScraper {
     }
   }
 
+  /**
+   * Initializes the browser with retry mechanism
+   * @private
+   * @async
+   * @returns {Promise<void>}
+   * @throws {Error} If browser initialization fails after all retries
+   */
   private async initialize(): Promise<void> {
     console.log('Initializing browser and output directory...');
     await fs.mkdir(this.outputDir, { recursive: true });
@@ -279,6 +485,13 @@ export class WebScraper {
     );
   }
 
+  /**
+   * Ensures browser is running and healthy
+   * @private
+   * @async
+   * @returns {Promise<Browser>} Active browser instance
+   * @throws {Error} If browser check fails
+   */
   private async ensureBrowser(): Promise<Browser> {
     if (!this.browser) {
       await this.initialize();
@@ -309,6 +522,12 @@ export class WebScraper {
     }
   }
 
+  /**
+   * Gets a new page from browser or page pool
+   * @private
+   * @async
+   * @returns {Promise<Page>} Browser page instance
+   */
   private async getPage(): Promise<Page> {
     const browser = await this.ensureBrowser();
     const page = await browser.newPage();
@@ -319,6 +538,13 @@ export class WebScraper {
     return page;
   }
 
+  /**
+   * Releases a page back to the pool or closes it
+   * @private
+   * @async
+   * @param {Page} page - Page to release
+   * @returns {Promise<void>}
+   */
   private async releasePage(page: Page): Promise<void> {
     if (this.pagePool.length < this.maxConcurrentPages) {
       this.pagePool.push(page);
@@ -327,6 +553,14 @@ export class WebScraper {
     }
   }
 
+  /**
+   * Processes a single page URL
+   * @private
+   * @async
+   * @param {string} url - URL to process
+   * @param {number} depth - Current crawl depth
+   * @returns {Promise<PageResult>} Processing result
+   */
   private async processSinglePage(url: string, depth: number): Promise<PageResult> {
     if (this.isShuttingDown) {
       console.log('Scraper is shutting down, skipping:', url);
@@ -395,6 +629,14 @@ export class WebScraper {
     }
   }
 
+  /**
+   * Internal page processing implementation
+   * @private
+   * @async
+   * @param {string} url - URL to process
+   * @param {number} depth - Current crawl depth
+   * @returns {Promise<PageResult>} Processing result
+   */
   private async processPageInternal(url: string, depth: number): Promise<PageResult> {
     if (this.isShuttingDown) {
       throw new Error('Scraper is shutting down');
@@ -443,6 +685,13 @@ export class WebScraper {
     }
   }
 
+  /**
+   * Cleans up resources for a specific URL or entire scraper
+   * @private
+   * @async
+   * @param {string} [url] - Optional URL to cleanup
+   * @returns {Promise<void>}
+   */
   private async cleanup(url?: string): Promise<void> {
     try {
       if (url) {
@@ -476,6 +725,15 @@ export class WebScraper {
     }
   }
 
+  /**
+   * Processes a page with browser automation
+   * @private
+   * @async
+   * @param {Page} page - Browser page instance
+   * @param {string} url - URL to process
+   * @param {number} depth - Current crawl depth
+   * @returns {Promise<PageResult>} Processing result
+   */
   private async processPage(page: Page, url: string, depth: number): Promise<PageResult> {
     const pageTimeout = setTimeout(() => {
       console.warn(`Page processing timeout for ${url}`);
@@ -510,6 +768,14 @@ export class WebScraper {
     }
   }
 
+  /**
+   * Processes page content including screenshots and LLM processing
+   * @private
+   * @async
+   * @param {Page} page - Browser page instance
+   * @param {string} url - Page URL
+   * @returns {Promise<PageResult>} Processing result
+   */
   private async processPageContent(page: Page, url: string): Promise<PageResult> {
     try {
       console.log(`Processing page content for: ${url}`);
@@ -551,6 +817,14 @@ export class WebScraper {
     }
   }
 
+  /**
+   * Scrapes content with retry mechanism
+   * @private
+   * @async
+   * @param {Page} page - Browser page instance
+   * @param {number} [maxRetries=3] - Maximum retry attempts
+   * @returns {Promise<any>} Scraped content
+   */
   private async scrapeWithRetry(page: Page, maxRetries = 3): Promise<any> {
     let lastError;
 
@@ -571,6 +845,13 @@ export class WebScraper {
     throw lastError || new Error('Failed to scrape content after retries');
   }
 
+  /**
+   * Extracts valid links from page
+   * @private
+   * @async
+   * @param {Page} page - Browser page instance
+   * @returns {Promise<string[]>} Array of valid URLs
+   */
   private async extractValidLinks(page: Page): Promise<string[]> {
     const baseUrl = await page.evaluate(() => window.location.origin);
 
@@ -614,6 +895,14 @@ export class WebScraper {
     ];
   }
 
+  /**
+   * Formats content as markdown
+   * @private
+   * @param {string} content - Raw content
+   * @param {string} url - Source URL
+   * @param {string} [title] - Optional title
+   * @returns {string} Formatted markdown content
+   */
   private formatAsMarkdown(content: string, url: string, title?: string): string {
     const timestamp = new Date().toISOString();
 
@@ -648,6 +937,13 @@ ${formattedContent}
 `;
   }
 
+  /**
+   * Checks if two URLs have same origin
+   * @private
+   * @param {string} url1 - First URL
+   * @param {string} url2 - Second URL
+   * @returns {boolean} True if same origin
+   */
   private isSameOrigin(url1: string, url2: string): boolean {
     try {
       const getDomain = (url: string) => {
@@ -669,6 +965,13 @@ ${formattedContent}
     }
   }
 
+  /**
+   * Normalizes URL with base URL
+   * @private
+   * @param {string} url - URL to normalize
+   * @param {string} baseUrl - Base URL
+   * @returns {string | null} Normalized URL or null if invalid
+   */
   private normalizeUrl(url: string, baseUrl: string): string | null {
     try {
       if (url.startsWith('#') || /^(mailto|tel|javascript):/i.test(url)) {
@@ -690,6 +993,14 @@ ${formattedContent}
     }
   }
 
+  /**
+   * Chunks array into smaller arrays
+   * @private
+   * @template T
+   * @param {T[]} array - Array to chunk
+   * @param {number} size - Chunk size
+   * @returns {T[][]} Array of chunks
+   */
   private chunkArray<T>(array: T[], size: number): T[][] {
     const chunks: T[][] = [];
     for (let i = 0; i < array.length; i += size) {
@@ -698,6 +1009,12 @@ ${formattedContent}
     return chunks;
   }
 
+  /**
+   * Processes content through content filter
+   * @private
+   * @param {string | string[]} content - Content to process
+   * @returns {string} Filtered content
+   */
   private processContent(content: string | string[]): string {
     console.log('Processing content...');
     return Array.isArray(content)
@@ -705,6 +1022,14 @@ ${formattedContent}
       : this.contentFilter.filterText(content);
   }
 
+  /**
+   * Processes content with LLM
+   * @private
+   * @async
+   * @param {string} content - Content to process
+   * @param {string} url - Source URL
+   * @returns {Promise<string>} Processed content
+   */
   private async processWithLLM(content: string, url: string): Promise<string> {
     try {
       if (!content?.trim()) {
@@ -759,6 +1084,14 @@ ${formattedContent}
     }
   }
 
+  /**
+   * Takes screenshot of page
+   * @private
+   * @async
+   * @param {Page} page - Browser page instance
+   * @param {string} url - Page URL
+   * @returns {Promise<string>} Screenshot file path
+   */
   private async takeScreenshot(page: Page, url: string): Promise<string> {
     try {
       const urlObj = new URL(url);
@@ -795,24 +1128,6 @@ ${formattedContent}
       console.error(`Screenshot failed for ${url}:`, error);
       return '';
     }
-  }
-
-  private async scrollPage(page: Page): Promise<void> {
-    console.log('Scrolling page...');
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
-          const distance = 100;
-          const interval = setInterval(() => {
-            window.scrollBy(0, distance);
-            if (window.scrollY + window.innerHeight >= document.body.scrollHeight) {
-              clearInterval(interval);
-              window.scrollTo(0, 0);
-              setTimeout(resolve, 500);
-            }
-          }, 100);
-        }),
-    );
   }
 
   private createErrorResult(url: string, error: Error | string): PageResult {
