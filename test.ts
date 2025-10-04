@@ -9,7 +9,7 @@ async function test() {
     });
 
     console.log('Starting website scrape...');
-    const results = await scraper.scrapeWebsite('https://sepamujer.org/');
+    const results = await scraper.scrapeWebsite('https://mikeodnis.dev/');
 
     console.log('Scrape completed with results:');
     console.log('Number of pages scraped:', results.size);
