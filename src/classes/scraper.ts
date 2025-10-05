@@ -1,18 +1,18 @@
 /**
  * @fileoverview Web scraping and content filtering functionality
  * @module scraper
- * @description Provides classes and utilities for safely scraping web content while filtering 
+ * @description Provides classes and utilities for safely scraping web content while filtering
  * restricted/inappropriate content. Key components:
  * - ContentFilter: Singleton class for filtering restricted domains and content
  * - PageExtractor: Helper class for extracting text and code blocks from web pages
  * - scrape(): Main scraping function that orchestrates the process
- * 
+ *
  * @author Mike Odnis
  * @version 1.0.0
  * @license Apache-2.0
  */
 
-import type { Browser, Page, PuppeteerLaunchOptions } from 'puppeteer';
+import type { Browser, LaunchOptions, Page } from 'puppeteer';
 import puppeteer from 'puppeteer-extra';
 import { PuppeteerExtraPluginAdblocker } from 'puppeteer-extra-plugin-adblocker';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
@@ -26,7 +26,7 @@ const browser = puppeteer
  * Default Puppeteer browser launch options
  * @constant {PuppeteerLaunchOptions}
  */
-const BROWSER_OPTIONS: PuppeteerLaunchOptions = {
+const BROWSER_OPTIONS: LaunchOptions = {
   headless: true,
   args: [
     '--no-sandbox',
@@ -35,7 +35,7 @@ const BROWSER_OPTIONS: PuppeteerLaunchOptions = {
     '--disable-gpu',
     '--disable-web-security',
   ],
-  timeout: 30000,
+  timeout: 30_000,
 };
 
 /**
@@ -72,10 +72,10 @@ export class ContentFilter {
    * @returns {ContentFilter} The singleton instance
    */
   static getInstance(): ContentFilter {
-    if (!this.instance) {
-      this.instance = new ContentFilter();
+    if (!ContentFilter.instance) {
+      ContentFilter.instance = new ContentFilter();
     }
-    return this.instance;
+    return ContentFilter.instance;
   }
 
   /**
@@ -257,10 +257,10 @@ export async function scrape(url: string): Promise<{
   } catch (error) {
     console.error('Scraping error:', error);
     return {
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : String(error),
     };
   } finally {
-    await page?.close().catch(() => {});
-    await browserInstance?.close().catch(() => {});
+    await page?.close().catch(console.error);
+    await browserInstance?.close().catch(console.error);
   }
 }

@@ -7,7 +7,7 @@
  * - Sentiment analysis
  * - AI-powered safety checks
  * - Domain restriction validation
- * 
+ *
  * @author Mike Odnis
  * @version 1.0.0
  * @license Apache-2.0
@@ -25,7 +25,7 @@ import { ContentFilter } from './scraper.js';
  * - Sentiment analysis scoring
  * - AI model safety verification
  * - Domain restriction checking
- * 
+ *
  * The validator uses multiple approaches to provide comprehensive content safety analysis:
  * 1. Pattern matching for suspicious content patterns
  * 2. Keyword combination detection for potentially unsafe content
@@ -36,13 +36,13 @@ import { ContentFilter } from './scraper.js';
 export class ContentValidator {
   /** Content filtering instance for domain checks */
   private readonly contentFilter: ContentFilter;
-  
+
   /** Sentiment analysis implementation */
   private readonly sentimentAnalyzer: any;
-  
+
   /** Threshold for negative sentiment content */
   private readonly NEGATIVE_THRESHOLD = -0.7;
-  
+
   /** Threshold for extremely negative sentiment content */
   private readonly EXTREMELY_NEGATIVE_THRESHOLD = -0.9;
 
@@ -177,14 +177,19 @@ export class ContentValidator {
       }
 
       try {
-        const model = await this.genAI.getGenerativeModel({
-          model: gemini_model.model,
-          safetySettings: this.safetySettings,
-        });
-
         const safetyPrompt = `Analyze if this content is safe and appropriate. Response must be exactly "SAFE" or "UNSAFE": ${content.substring(0, 1000)}`;
-        const safetyCheck = await model.generateContent(safetyPrompt);
-        const safetyResponse = safetyCheck.response.text().toLowerCase().trim();
+        const safetyCheck = await this.genAI.models.generateContent({
+          model: gemini_model.model,
+          contents: [{ parts: [{ text: safetyPrompt }] }],
+          config: {
+            responseModalities: ['TEXT'],
+            safetySettings: [...this.safetySettings],
+          },
+        });
+        const safetyResponse = safetyCheck.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!safetyResponse) {
+          throw new Error('No AI text returned');
+        }
 
         if (safetyResponse === 'unsafe') {
           flags.push('ai_safety_check');

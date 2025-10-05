@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-import { createRequire } from 'module';
 import fs from 'node:fs/promises';
-import path from 'node:path';
-import { dirname } from 'node:path';
+import path, { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Table from 'cli-table3';
 import { Command } from 'commander';
 import dotenv from 'dotenv';
+import { createRequire } from 'module';
 import ora, { type Ora } from 'ora';
 import prettyBytes from 'pretty-bytes';
 import winston from 'winston';

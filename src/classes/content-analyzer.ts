@@ -15,25 +15,25 @@
  * - Comprehensive content analysis pipeline
  * - Intelligent prompt customization
  * - Fallback handling for edge cases
- * 
+ *
  * The system implements a robust content analysis workflow:
  * 1. URL Analysis
  *    - Pattern matching against predefined URL structures
  *    - Route classification and content type inference
  *    - Parameter extraction and validation
- * 
+ *
  * 2. Content Signal Detection
  *    - HTML structure analysis
  *    - Keyword and pattern identification
  *    - Metadata extraction and processing
  *    - Signal strength evaluation
- * 
+ *
  * 3. Context Classification
  *    - Content type determination
  *    - Structure analysis and categorization
  *    - Audience targeting assessment
  *    - Length and depth evaluation
- * 
+ *
  * 4. Prompt Generation
  *    - Template selection and customization
  *    - Context-aware prompt construction
@@ -45,22 +45,22 @@
  * // Initialize analyzer and process content
  * const url = 'https://example.com/blog/article';
  * const html = '<article>...</article>';
- * 
+ *
  * // Analyze content structure and context
  * const context = ContentAnalyzer.analyzeContent(url, html);
  *
  * // Generate appropriate context-aware prompt
  * const prompt = PromptGenerator.generatePrompt(context, html);
- * 
+ *
  * // Process with LLM
  * const result = await llm.process(prompt);
  * ```
- * 
+ *
  * @see {@link ContentAnalyzer} For content analysis functionality
  * @see {@link PromptGenerator} For prompt generation capabilities
  * @see {@link ContentContext} For content context structure
  * @see {@link RouteAnalysis} For URL route analysis configuration
- * 
+ *
  * @author Mike Odnis
  * @version 1.0.0
  * @license Apache-2.0
@@ -72,12 +72,12 @@
  * @description Defines the structural representation of content context including page type,
  * content characteristics, and target audience information. Used to customize content
  * processing and prompt generation.
- * 
+ *
  * @property {('article'|'product'|'category'|'profile'|'general')} pageType - The type of page being analyzed
  * @property {('brief'|'standard'|'detailed')} contentLength - The relative length/depth of the content
  * @property {('narrative'|'analytical'|'technical'|'descriptive')} structureType - The structural style of the content
  * @property {('general'|'technical'|'business'|'academic')} targetAudience - The intended audience for the content
- * 
+ *
  * @example
  * ```typescript
  * const context: ContentContext = {
@@ -87,25 +87,25 @@
  *   targetAudience: 'technical'
  * };
  * ```
- * 
+ *
  * Page Types:
  * - article: Blog posts, news articles, editorial content
  * - product: Product pages, item listings, shop entries
  * - category: Category pages, department listings, sections
  * - profile: User profiles, about pages, portfolios
  * - general: Default type for unclassified content
- * 
+ *
  * Content Lengths:
  * - brief: Short-form content, summaries (<1000 words)
  * - standard: Medium-length content (1000-3000 words)
  * - detailed: Long-form, in-depth content (>3000 words)
- * 
+ *
  * Structure Types:
  * - narrative: Story-based, chronological flow
  * - analytical: Data-driven, research-oriented
  * - technical: Specification-focused, procedural
  * - descriptive: Feature-focused, explanatory
- * 
+ *
  * Target Audiences:
  * - general: General public, non-specialized readers
  * - technical: Technical professionals, developers
@@ -125,11 +125,11 @@ interface ContentContext {
  * @description Configuration interface for URL route analysis that defines patterns,
  * signals, and associated context for content classification. Used to identify
  * content types and characteristics from URL structure and content indicators.
- * 
+ *
  * @property {RegExp[]} patterns - Regular expressions to match URL patterns
  * @property {string[]} signals - Keywords/indicators to identify content type
  * @property {ContentContext} context - The content context associated with matched patterns/signals
- * 
+ *
  * @example
  * ```typescript
  * const articleRoute: RouteAnalysis = {
@@ -143,17 +143,17 @@ interface ContentContext {
  *   }
  * };
  * ```
- * 
+ *
  * Pattern Types:
  * - Path segments (/blog/, /article/, etc.)
  * - Query parameters (?type=article)
  * - URL structures (/yyyy/mm/dd/title)
- * 
+ *
  * Signal Categories:
  * - Content indicators (author, price)
  * - Page elements (comments, cart)
  * - Metadata (published date, category)
- * 
+ *
  * Context Association:
  * - Default settings for matched content
  * - Base configuration for processing
@@ -172,14 +172,14 @@ interface RouteAnalysis {
  * @description Provides comprehensive static methods for analyzing web content and determining
  * its context. Implements pattern matching, signal detection, and content classification
  * to provide detailed content analysis.
- * 
+ *
  * Key Features:
  * - URL pattern analysis
  * - Content signal detection
  * - Structure classification
  * - Context determination
  * - Metadata extraction
- * 
+ *
  * Analysis Process:
  * 1. URL Analysis
  *    - Pattern matching
@@ -190,7 +190,7 @@ interface RouteAnalysis {
  * 3. Context Generation
  *    - Type classification
  *    - Characteristic determination
- * 
+ *
  * @example
  * ```typescript
  * const context = ContentAnalyzer.analyzeContent(
@@ -208,18 +208,18 @@ export class ContentAnalyzer {
    * @type {RouteAnalysis[]}
    * @description Comprehensive configuration array defining patterns, signals, and contexts
    * for different content types. Used as the basis for content classification and analysis.
-   * 
+   *
    * Pattern Categories:
    * - Article routes (/blog/, /news/, etc.)
    * - Product routes (/shop/, /item/, etc.)
    * - Category routes (/category/, /department/, etc.)
    * - Profile routes (/about/, /user/, etc.)
-   * 
+   *
    * Signal Types:
    * - Content indicators (author, price)
    * - Page elements (comments, cart)
    * - Metadata (published date, category)
-   * 
+   *
    * Context Configurations:
    * - Default settings for each type
    * - Base processing parameters
@@ -276,28 +276,28 @@ export class ContentAnalyzer {
    * @returns {Set<string>} Set of identified content signals
    * @description Performs comprehensive HTML content analysis to identify structural
    * elements and content indicators that help classify and contextualize the content.
-   * 
+   *
    * Analysis Categories:
    * 1. Document Structure
    *    - Headers and sections
    *    - Lists and tables
    *    - Navigation elements
-   * 
+   *
    * 2. Content Indicators
    *    - Pricing information
    *    - Author attribution
    *    - Dates and timestamps
-   * 
+   *
    * 3. Metadata
    *    - Schema markup
    *    - Meta tags
    *    - Custom attributes
-   * 
+   *
    * Signal Types:
    * - Structural signals (headers, lists)
    * - Content signals (price, author)
    * - Contextual signals (dates, categories)
-   * 
+   *
    * @example
    * ```typescript
    * const signals = ContentAnalyzer.getContentSignals('<article>...</article>');
@@ -334,30 +334,30 @@ export class ContentAnalyzer {
    * @returns {ContentContext} The determined content context
    * @description Performs comprehensive content analysis through multiple stages
    * to determine the most appropriate content context for processing.
-   * 
+   *
    * Analysis Pipeline:
    * 1. URL Analysis
    *    - Extract and parse URL path
    *    - Match against route patterns
    *    - Identify content type indicators
-   * 
+   *
    * 2. Content Analysis
    *    - Extract content signals
    *    - Analyze document structure
    *    - Identify content indicators
-   * 
+   *
    * 3. Pattern Matching
    *    - Compare against predefined patterns
    *    - Evaluate signal matches
    *    - Determine best context match
-   * 
+   *
    * 4. Context Generation
    *    - Select appropriate context
    *    - Apply default settings
    *    - Return final context
-   * 
+   *
    * @throws {Error} If URL is invalid or cannot be parsed
-   * 
+   *
    * @example
    * ```typescript
    * const context = ContentAnalyzer.analyzeContent(
@@ -369,10 +369,10 @@ export class ContentAnalyzer {
    */
   public static analyzeContent(url: string, content: string): ContentContext {
     const urlPath = new URL(url).pathname;
-    const contentSignals = this.getContentSignals(content);
+    const contentSignals = ContentAnalyzer.getContentSignals(content);
 
     // Find matching route pattern
-    for (const route of this.routePatterns) {
+    for (const route of ContentAnalyzer.routePatterns) {
       const matchesPattern = route.patterns.some((pattern) => pattern.test(urlPath));
       const matchesSignals = route.signals.some((signal) => contentSignals.has(signal));
 
@@ -397,20 +397,20 @@ export class ContentAnalyzer {
  * @description Provides comprehensive functionality for generating tailored prompts
  * based on content context and characteristics. Implements a flexible template
  * system with context-aware customization.
- * 
+ *
  * Key Features:
  * - Template-based generation
  * - Context-aware customization
  * - Multiple content type support
  * - Fallback handling
  * - Dynamic content insertion
- * 
+ *
  * Template Categories:
  * - Article templates
  * - Product templates
  * - Profile templates
  * - General templates
- * 
+ *
  * @example
  * ```typescript
  * const prompt = PromptGenerator.generatePrompt(
@@ -429,21 +429,21 @@ export class PromptGenerator {
    * @description Comprehensive template system providing context-specific prompt
    * templates for different content types and structures. Supports dynamic
    * content insertion and context-aware customization.
-   * 
+   *
    * Template Categories:
    * 1. Article Templates
    *    - Narrative style
    *    - Analytical style
    *    - Technical style
-   * 
+   *
    * 2. Product Templates
    *    - Descriptive style
    *    - Technical style
-   * 
+   *
    * 3. Profile Templates
    *    - Narrative style
    *    - Descriptive style
-   * 
+   *
    * Template Features:
    * - Content placeholders
    * - Structure guidelines
@@ -531,20 +531,20 @@ Content: {content}`,
    * @description Generates context-appropriate prompts by selecting and customizing
    * templates based on content type and structure. Implements fallback handling
    * for unsupported content types.
-   * 
+   *
    * Generation Process:
    * 1. Template Selection
    *    - Match content type
    *    - Select structure variation
-   * 
+   *
    * 2. Content Integration
    *    - Insert content into template
    *    - Apply context-specific formatting
-   * 
+   *
    * 3. Fallback Handling
    *    - Check template availability
    *    - Apply default template if needed
-   * 
+   *
    * @example
    * ```typescript
    * const prompt = PromptGenerator.generatePrompt(
@@ -555,13 +555,16 @@ Content: {content}`,
    */
   public static generatePrompt(context: ContentContext, content: string): string {
     const { pageType, structureType } = context;
-    const templates = this.promptTemplates[pageType as keyof typeof this.promptTemplates];
+    const templates =
+      PromptGenerator.promptTemplates[pageType as keyof typeof this.promptTemplates];
 
     if (!templates) {
-      return this.getDefaultPrompt(content);
+      return PromptGenerator.getDefaultPrompt(content);
     }
     const template = templates[structureType as keyof typeof templates] as string;
-    return template ? template.replace('{content}', content) : this.getDefaultPrompt(content);
+    return template
+      ? template.replace('{content}', content)
+      : PromptGenerator.getDefaultPrompt(content);
   }
 
   /**
@@ -573,13 +576,13 @@ Content: {content}`,
    * @description Generates a generic but comprehensive prompt for content analysis
    * when no specific template matches the content context. Ensures basic content
    * processing capabilities are maintained.
-   * 
+   *
    * Default Processing:
    * - Topic extraction
    * - Content organization
    * - Redundancy removal
    * - Clarity improvement
-   * 
+   *
    * @example
    * ```typescript
    * const prompt = PromptGenerator.getDefaultPrompt('Content...');

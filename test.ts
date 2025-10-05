@@ -9,7 +9,7 @@ async function test() {
     });
 
     console.log('Starting website scrape...');
-    const results = await scraper.scrapeWebsite('https://example.com');
+    const results = await scraper.scrapeWebsite('https://gdsc-fsc-l.web.app/');
 
     console.log('Scrape completed with results:');
     console.log('Number of pages scraped:', results.size);
@@ -29,4 +29,4 @@ async function test() {
   }
 }
 
-test();
+test().catch(console.error);

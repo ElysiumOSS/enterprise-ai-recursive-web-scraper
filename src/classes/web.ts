@@ -10,7 +10,7 @@
  * - Risk analysis and metrics
  * - File system storage
  * - Graceful shutdown handling
- * 
+ *
  * Key features:
  * - Configurable concurrency and rate limiting
  * - Recursive link following with depth control
@@ -21,31 +21,31 @@
  * - Caching with LRU implementation
  * - Robust error handling and retries
  * - Graceful shutdown with reporting
- * 
+ *
  * The system implements a robust scraping workflow:
  * 1. Browser Control
  *    - Automated browser management
  *    - Page pool for resource efficiency
  *    - Navigation timeout handling
- * 
+ *
  * 2. Content Processing
  *    - HTML content extraction
  *    - Text filtering and cleaning
  *    - LLM-based processing
  *    - Risk assessment
- * 
+ *
  * 3. Resource Management
  *    - Rate limiting
  *    - Concurrent page processing
  *    - Memory efficient caching
  *    - File system storage
- * 
+ *
  * 4. Error Handling
  *    - Retry mechanisms
  *    - Timeout management
  *    - Graceful degradation
  *    - Detailed error reporting
- * 
+ *
  * @author Mike Odnis
  * @version 1.0.0
  * @license Apache-2.0
@@ -56,7 +56,7 @@ import path from 'node:path';
 import { Sema } from 'async-sema';
 import { LRUCache } from 'lru-cache';
 import natural from 'natural';
-import { type Browser, type Page, chromium } from 'playwright';
+import { type Browser, chromium, type Page } from 'playwright';
 import { gemini_model, genAI, safetySettings } from '../constants/gemini-settings.js';
 import { ContentAnalyzer, PromptGenerator } from './content-analyzer.js';
 import { ContentValidator } from './content-validator.js';
@@ -171,7 +171,7 @@ const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000)
       throw error;
     }
 
-    await delay(baseDelay * Math.pow(2, 3 - retries));
+    await delay(baseDelay * 2 ** (3 - retries));
     return withRetry(fn, retries - 1, baseDelay);
   }
 };
@@ -817,7 +817,7 @@ export class WebScraper {
       };
     } catch (error) {
       console.error(`Failed to process page ${url}:`, error);
-      return this.createErrorResult(url, error instanceof Error ? error.message : 'Unknown error');
+      return this.createErrorResult(url, error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -1050,14 +1050,24 @@ ${formattedContent}
         const context = ContentAnalyzer.analyzeContent(url, filteredContent);
         const dynamicPrompt = PromptGenerator.generatePrompt(context, filteredContent);
 
-        const model = await genAI.getGenerativeModel({
-          model: gemini_model.model,
-          safetySettings,
-        });
+        const model = gemini_model.model;
 
-        const response = await withRetry(() => model.generateContent(dynamicPrompt));
+        const response = await withRetry(() =>
+          genAI.models.generateContent({
+            model: model,
+            contents: [{ parts: [{ text: dynamicPrompt }] }],
+            config: {
+              responseModalities: ['TEXT'],
+              safetySettings: [...safetySettings],
+            },
+          }),
+        );
 
-        const processedResponse = await this.validator.validateAIResponse(response.response.text());
+        const aiText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!aiText) {
+          throw new Error('No AI text returned');
+        }
+        const processedResponse = await this.validator.validateAIResponse(aiText);
 
         if (processedResponse.isValid) {
           return processedResponse.reason ?? filteredContent;
@@ -1135,7 +1145,7 @@ ${formattedContent}
   }
 
   private createErrorResult(url: string, error: Error | string): PageResult {
-    const errorMessage = error instanceof Error ? error.message : error;
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     if (!errorMessage.includes('429') && !errorMessage.includes('quota')) {
       console.error('Creating error result for URL:', url, errorMessage);
@@ -1255,7 +1265,7 @@ ${formattedContent}
         urlPaths: {} as Record<string, string[]>,
       };
 
-      for (const [url, result] of this.results.entries()) {
+      for (const [url] of this.results.entries()) {
         const urlObj = new URL(url);
         const sanitizedPath = this.generateRoutePath(urlObj);
 
