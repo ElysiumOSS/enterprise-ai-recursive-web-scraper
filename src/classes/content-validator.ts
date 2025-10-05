@@ -7,6 +7,10 @@
  * - Sentiment analysis
  * - AI-powered safety checks
  * - Domain restriction validation
+ * 
+ * @author Mike Odnis
+ * @version 1.0.0
+ * @license Apache-2.0
  */
 
 import { gemini_model } from '../constants/gemini-settings.js';

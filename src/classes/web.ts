@@ -45,6 +45,10 @@
  *    - Timeout management
  *    - Graceful degradation
  *    - Detailed error reporting
+ * 
+ * @author Mike Odnis
+ * @version 1.0.0
+ * @license Apache-2.0
  */
 
 import fs from 'node:fs/promises';

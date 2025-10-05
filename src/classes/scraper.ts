@@ -6,6 +6,10 @@
  * - ContentFilter: Singleton class for filtering restricted domains and content
  * - PageExtractor: Helper class for extracting text and code blocks from web pages
  * - scrape(): Main scraping function that orchestrates the process
+ * 
+ * @author Mike Odnis
+ * @version 1.0.0
+ * @license Apache-2.0
  */
 
 import type { Browser, Page, PuppeteerLaunchOptions } from 'puppeteer';

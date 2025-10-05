@@ -61,9 +61,9 @@
  * @see {@link ContentContext} For content context structure
  * @see {@link RouteAnalysis} For URL route analysis configuration
  * 
- * @author Your Name
+ * @author Mike Odnis
  * @version 1.0.0
- * @license MIT
+ * @license Apache-2.0
  */
 
 /**
