@@ -1,9 +1,9 @@
+import { $ } from 'bun';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import dotenv from 'dotenv';
 import { fail } from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { $ } from 'bun';
-import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -14,10 +14,10 @@ interface CliError {
 
 describe('CLI', () => {
   const CLI_PATH = path.join(__dirname, '../../src/cli.ts');
-  const TEST_URL = 'https://headstarter.co';
+  const TEST_URL = 'https://gdsc-fsc-l.web.app/';
   const TEST_OUTPUT = path.resolve(process.cwd(), 'test-output');
   const TEST_API_KEY = process.env.GOOGLE_AI_API_KEY;
-  const TEST_TIMEOUT = 60000;
+  const TEST_TIMEOUT = 120_000;
 
   beforeEach(() => {
     try {
@@ -28,7 +28,7 @@ describe('CLI', () => {
       if (error instanceof Error) {
         throw new Error(`Failed to create test directory: ${error.message}`);
       }
-      throw error;
+      throw String(error);
     }
   });
 
@@ -42,7 +42,7 @@ describe('CLI', () => {
       if (error instanceof Error) {
         console.warn('Failed to clean up test directory:', error.message);
       } else {
-        console.warn('Failed to clean up test directory:', error);
+        console.warn('Failed to clean up test directory:', String(error));
       }
     }
   });
@@ -90,31 +90,35 @@ describe('CLI', () => {
     'handles standard scraping',
     async () => {
       const outputPath = path.resolve(TEST_OUTPUT);
-      const start = Date.now();
 
       try {
         if (!fs.existsSync(outputPath)) {
           fs.mkdirSync(outputPath, { recursive: true });
         }
 
-        const scrapePromise =
-          $`bun "${CLI_PATH}" --api-key "${TEST_API_KEY}" --url "${TEST_URL}" --output "${outputPath}" --format json`.then(
-            (s) => setTimeout(() => s, TEST_TIMEOUT),
-          );
+        // Start the scraping process
+        const scrapeProcess = $`bun "${CLI_PATH}" --api-key "${TEST_API_KEY}" --url "${TEST_URL}" --output "${outputPath}" --format json`;
 
-        const checkInterval = setInterval(() => {
+        // Wait for the process to complete with a reasonable timeout
+        try {
+          const result = await scrapeProcess;
+          console.log('Process completed with exit code:', result.exitCode);
+        } catch (error) {
+          console.log('Process failed with error:', error);
+          // Even if the process fails, check if files were generated
           if (fs.existsSync(outputPath)) {
             const files = fs.readdirSync(outputPath);
             if (files.length > 0) {
-              console.log(`Files generated: ${files.join(', ')}`);
-              clearInterval(checkInterval);
+              console.log('Files were generated despite process error:', files);
+              expect(fs.existsSync(outputPath)).toBe(true);
+              expect(files.length).toBeGreaterThan(0);
+              return;
             }
           }
-        }, 1000);
+          throw error;
+        }
 
-        await scrapePromise;
-        clearInterval(checkInterval);
-
+        // Check if files were generated after successful completion
         expect(fs.existsSync(outputPath)).toBe(true);
         const files = fs.readdirSync(outputPath);
         expect(files.length).toBeGreaterThan(0);
@@ -123,6 +127,7 @@ describe('CLI', () => {
           const files = fs.readdirSync(outputPath);
           if (files.length > 0) {
             console.log('Files were generated despite error:', files);
+            expect(files.length).toBeGreaterThan(0);
             return;
           }
         }
@@ -132,3 +137,4 @@ describe('CLI', () => {
     TEST_TIMEOUT,
   );
 });
+

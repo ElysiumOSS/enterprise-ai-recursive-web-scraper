@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import fs from 'node:fs/promises';
-import path, { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import Table from 'cli-table3';
 import { Command } from 'commander';
 import dotenv from 'dotenv';
 import { createRequire } from 'module';
+import fs from 'node:fs/promises';
+import path, { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import ora, { type Ora } from 'ora';
 import prettyBytes from 'pretty-bytes';
 import winston from 'winston';
@@ -348,6 +348,8 @@ class ScraperCLI {
         successCount: [...results.values()].filter((r) => !r.error).length,
         memoryUsage: process.memoryUsage(),
       });
+
+      process.exit(0);
     } catch (error: unknown) {
       this.handleError(error);
     }

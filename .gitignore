@@ -7,3 +7,4 @@ bun.lockb
 scraping_output
 *.log
 *.tgz
+test-output/
