@@ -5,7 +5,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm build
+      - run: bun run build
       - run: node ./lib/index.js
   lint:
     name: Lint
@@ -13,49 +13,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm lint
+      - run: bun run lint
   lint_knip:
     name: Lint Knip
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm lint:knip
+      - run: bun run lint:knip
   lint_markdown:
     name: Lint Markdown
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm lint:md
+      - run: bun run lint:md
   lint_packages:
     name: Lint Packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm lint:packages
+      - run: bun run lint:packages
   lint_spelling:
     name: Lint Spelling
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm lint:spelling
+      - run: bun run lint:spelling
   prettier:
     name: Prettier
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm format --list-different
+      - run: bun run format --list-different
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm run test --coverage
+      - run: bun run test --coverage
       - uses: codecov/codecov-action@v3
   type_check:
     name: Type Check
@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare
-      - run: pnpm tsc
+      - run: bun run tsc
 
 name: CI
 

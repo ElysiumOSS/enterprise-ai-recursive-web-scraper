@@ -1,11 +1,11 @@
 # Development
 
-After [forking the repo from GitHub](https://help.github.com/articles/fork-a-repo) and [installing pnpm](https://pnpm.io/installation):
+After [forking the repo from GitHub](https://help.github.com/articles/fork-a-repo) and [installing Bun](https://bun.sh/docs/installation):
 
 ```shell
 git clone https://github.com/ < your-name-here > /enterprise-ai-recursive-web-scraper
 cd enterprise-ai-recursive-web-scraper
-pnpm install
+bun install
 ```
 
 > This repository includes a list of suggested VS Code extensions.
@@ -16,13 +16,13 @@ pnpm install
 Run [**tsup**](https://tsup.egoist.dev) locally to build source files from `src/` into output files in `lib/`:
 
 ```shell
-pnpm build
+bun run build
 ```
 
 Add `--watch` to run the builder in a watch mode that continuously cleans and recreates `lib/` as you save files:
 
 ```shell
-pnpm build --watch
+bun run build --watch
 ```
 
 ## Formatting
@@ -33,7 +33,7 @@ It should be applied automatically when you save files in VS Code or make a Git 
 To manually reformat all files, you can run:
 
 ```shell
-pnpm format --write
+bun run format --write
 ```
 
 ## Linting
@@ -41,21 +41,21 @@ pnpm format --write
 This package includes several forms of linting to enforce consistent code quality and styling.
 Each should be shown in VS Code, and can be run manually on the command-line:
 
-- `pnpm lint` ([ESLint](https://eslint.org) with [typescript-eslint](https://typescript-eslint.io)): Lints JavaScript and TypeScript source files
-- `pnpm lint:knip` ([knip](https://github.com/webpro/knip)): Detects unused files, dependencies, and code exports
-- `pnpm lint:md` ([Markdownlint](https://github.com/DavidAnson/markdownlint): Checks Markdown source files
-- `pnpm lint:packages` ([pnpm dedupe --check](https://pnpm.io/cli/dedupe)): Checks for unnecessarily duplicated packages in the `pnpm-lock.yml` file
-- `pnpm lint:spelling` ([cspell](https://cspell.org)): Spell checks across all source files
+- `bun run lint` ([ESLint](https://eslint.org) with [typescript-eslint](https://typescript-eslint.io)): Lints JavaScript and TypeScript source files
+- `bun run lint:knip` ([knip](https://github.com/webpro/knip)): Detects unused files, dependencies, and code exports
+- `bun run lint:md` ([Markdownlint](https://github.com/DavidAnson/markdownlint): Checks Markdown source files
+- `bun run lint:packages` ([bun dedupe --check](https://bun.sh/docs/cli/dedupe)): Checks for unnecessarily duplicated packages in the `bun.lockb` file
+- `bun run lint:spelling` ([cspell](https://cspell.org)): Spell checks across all source files
 
 Read the individual documentation for each linter to understand how it can be configured and used best.
 
 For example, ESLint can be run with `--fix` to auto-fix some lint rule complaints:
 
 ```shell
-pnpm run lint --fix
+bun run lint --fix
 ```
 
-Note that you'll likely need to run `pnpm build` before `pnpm lint` so that lint rules which check the file system can pick up on any built files.
+Note that you'll likely need to run `bun run build` before `bun run lint` so that lint rules which check the file system can pick up on any built files.
 
 ## Testing
 
@@ -63,13 +63,13 @@ Note that you'll likely need to run `pnpm build` before `pnpm lint` so that lint
 You can run it locally on the command-line:
 
 ```shell
-pnpm run test
+bun run test
 ```
 
 Add the `--coverage` flag to compute test coverage and place reports in the `coverage/` directory:
 
 ```shell
-pnpm run test --coverage
+bun run test --coverage
 ```
 
 Note that [console-fail-test](https://github.com/JoshuaKGoldberg/console-fail-test) is enabled for all test runs.
@@ -87,11 +87,11 @@ You should be able to see suggestions from [TypeScript](https://typescriptlang.o
 However, it can be useful to run the TypeScript command-line (`tsc`) to type check all files in `src/`:
 
 ```shell
-pnpm tsc
+bun run tsc
 ```
 
 Add `--watch` to keep the type checker running in a watch mode that updates the display as you save files:
 
 ```shell
-pnpm tsc --watch
+bun run tsc --watch
 ```

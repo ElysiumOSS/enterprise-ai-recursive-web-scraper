@@ -10,7 +10,7 @@ jobs:
           fetch-depth: 0
           ref: main
       - uses: ./.github/actions/prepare
-      - run: pnpm build
+      - run: bun run build
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

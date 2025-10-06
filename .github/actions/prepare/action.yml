@@ -4,13 +4,12 @@ name: Prepare
 
 runs:
   steps:
-    - uses: pnpm/action-setup@v4
+    - uses: oven-sh/setup-bun@v1
       with:
-        version: 9
+        bun-version: latest
     - uses: actions/setup-node@v4
       with:
-        cache: pnpm
         node-version: "20"
-    - run: pnpm install --frozen-lockfile
+    - run: bun install --frozen-lockfile
       shell: bash
   using: composite
