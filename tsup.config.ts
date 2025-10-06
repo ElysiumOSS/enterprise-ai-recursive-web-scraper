@@ -8,32 +8,13 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   outDir: 'lib',
-  noExternal: [
-    'chalk',
-    'ora',
-    'cli-table3',
-    'commander',
-    'dotenv',
-    'inquirer',
-    'natural',
-    'pretty-bytes',
-    'winston',
-  ],
-  external: [
-    'events',
-    'fs',
-    'path',
-    'url',
-    'util',
-    'stream',
-    'os',
-    'http',
-    'https',
-    'net',
-    'tls',
-    'crypto',
-    'zlib',
-  ],
   platform: 'node',
   target: 'node18',
+  // Don't bundle anything - just compile TypeScript
+  external: [/.*/],
+  esbuildOptions(options) {
+    options.banner = {
+      js: '#!/usr/bin/env node',
+    };
+  },
 });

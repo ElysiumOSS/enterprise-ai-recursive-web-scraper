@@ -1,6 +1,6 @@
 {
 	"name": "enterprise-ai-recursive-web-scraper",
-	"version": "1.0.5",
+	"version": "1.1.2",
 	"description": "AI powered, recursive, web-scraper utilizing Gemini models, Puppeteer, and Playwright",
 	"keywords": [
 		"web-scraper",
@@ -13,7 +13,7 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/WomB0ComB0/enterprise-ai-recursive-web-scraper"
+		"url": "git+https://github.com/ElysiumOSS/enterprise-ai-recursive-web-scraper.git"
 	},
 	"license": "MIT",
 	"author": {
@@ -33,7 +33,7 @@
 	},
 	"main": "./lib/cli.js",
 	"bin": {
-		"web-scraper": "./lib/cli.js"
+		"enterprise-ai-recursive-web-scraper": "lib/cli-wrapper.js"
 	},
 	"files": [
 		"lib/*.js",
@@ -44,8 +44,9 @@
 		"README.md"
 	],
 	"scripts": {
-		"build": "bun run build:pre && tsup",
+		"build": "bun run build:pre && bun run build:tsc",
 		"build:pre": "bunx puppeteer browsers install chrome",
+		"build:tsc": "tsc && echo '#!/usr/bin/env node' > lib/cli-wrapper.js && echo 'import(\"./cli.js\");' >> lib/cli-wrapper.js && chmod +x lib/cli-wrapper.js",
 		"prepack": "bun run build",
 		"start": "bun run cli",
 		"cli": "bun lib/cli.js",

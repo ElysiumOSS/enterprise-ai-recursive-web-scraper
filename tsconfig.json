@@ -7,7 +7,7 @@
     "strictNullChecks": true,
     "module": "ESNext",
     "moduleResolution": "node",
-    "noEmit": true,
+    "noEmit": false,
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "sourceMap": true,
