@@ -13,6 +13,7 @@
         "cli-table3": "^0.6.5",
         "commander": "^14.0.1",
         "dotenv": "^17.2.3",
+        "enterprise-ai-recursive-web-scraper": "^1.1.2",
         "inquirer": "^12.9.6",
         "lru-cache": "^11.2.2",
         "natural": "^8.1.0",
@@ -444,6 +445,8 @@
     "enabled": ["enabled@2.0.0", "", {}, "sha512-AKrN98kuwOzMIdAizXGI86UFBoo26CL21UM763y1h/GMSJ4/OHU9k2YlsmBpyScFo/wbLzWQJBMCW4+IO3/+OQ=="],
 
     "end-of-stream": ["end-of-stream@1.4.5", "", { "dependencies": { "once": "^1.4.0" } }, "sha512-ooEGc6HP26xXq/N+GCGOT0JKCLDGrq2bQUZrQ7gyrJiZANJ/8YDTxTpQBXGMn+WbIQXNVpyWymm7KYVICQnyOg=="],
+
+    "enterprise-ai-recursive-web-scraper": ["enterprise-ai-recursive-web-scraper@1.1.2", "", { "dependencies": { "@biomejs/biome": "2.2.5", "@google/genai": "^1.22.0", "@types/bun": "^1.2.23", "async-sema": "^3.1.1", "bottleneck": "^2.19.5", "chalk": "^5.6.2", "cli-table3": "^0.6.5", "commander": "^14.0.1", "dotenv": "^17.2.3", "inquirer": "^12.9.6", "lru-cache": "^11.2.2", "natural": "^8.1.0", "ora": "^9.0.0", "playwright": "^1.55.1", "pretty-bytes": "^7.1.0", "puppeteer": "^24.23.0", "puppeteer-extra": "^3.3.6", "puppeteer-extra-plugin-adblocker": "^2.13.6", "puppeteer-extra-plugin-stealth": "^2.11.2", "vitest": "^3.2.4", "winston": "^3.18.3" }, "bin": { "enterprise-ai-recursive-web-scraper": "lib/cli-wrapper.js" } }, "sha512-Bkuk5reM3pCCX0LLSaQF/GVbpwchaqHyjhb0N5yC+Ojqvos6kr7G5nwqJf3GbIkJKWSXOIrmnmef9QAGCFMDVg=="],
 
     "env-paths": ["env-paths@2.2.1", "", {}, "sha512-+h1lkLKhZMTYjog1VEpJNG7NZJWcuc2DDk/qsqSTRRCOXiLjeQ1d1/udrUGhqMxUgAlwKNZ0cf2uqan5GLuS2A=="],
 

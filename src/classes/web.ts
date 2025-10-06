@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @fileoverview Web scraping system for extracting, processing and analyzing web content
  * @module web-scraper
@@ -226,7 +227,7 @@ export class RateLimiter {
   private async refill(): Promise<void> {
     const now = Date.now();
     const timePassed = now - this.lastRefill;
-    const refill = Math.floor((timePassed * this.refillRate) / 1000);
+    const refill = Math.floor((timePassed * this.refillRate) / 1_000);
     this.tokens = Math.min(this.maxTokens, this.tokens + refill);
     this.lastRefill = now;
   }
@@ -293,11 +294,11 @@ export class WebScraper {
    * @property {number} TIMEOUTS.retryDelay - Delay between retries
    */
   private static readonly TIMEOUTS = {
-    navigation: 30000,
-    processing: 60000,
-    screenshot: 30000,
-    browserLaunch: 120000,
-    retryDelay: 5000,
+    navigation: 30_000,
+    processing: 60_000,
+    screenshot: 30_000,
+    browserLaunch: 120_000,
+    retryDelay: 5_000,
   };
 
   /**
@@ -340,7 +341,7 @@ export class WebScraper {
       '--use-mock-keychain',
       '--window-size=1920,1080',
     ],
-    timeout: 120000,
+    timeout: 120_000,
     retries: 5,
     retryBackoff: true,
   };
@@ -362,8 +363,8 @@ export class WebScraper {
     this.maxDepth = config.maxDepth ?? 3;
 
     this.results = new LRUCache({
-      max: config.cacheOptions?.max ?? 1000,
-      ttl: config.cacheOptions?.ttl ?? 1000 * 60 * 60,
+      max: config.cacheOptions?.max ?? 1_000,
+      ttl: config.cacheOptions?.ttl ?? 1_000 * 60 * 60,
       updateAgeOnGet: true,
     });
 
