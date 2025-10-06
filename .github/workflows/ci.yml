@@ -66,6 +66,8 @@ jobs:
       - run: bun run tsc
 
 name: CI
+permissions:
+  contents: read
 
 on:
   pull_request: ~
