@@ -869,7 +869,16 @@ export class WebScraper {
               ...new Set(
                 Array.from(document.querySelectorAll('a[href]'))
                   .map((a) => (a as HTMLAnchorElement).href)
-                  .filter((href) => href && !href.startsWith('javascript:')),
+                  .filter((href) => {
+                    if (!href) return false;
+                    // Remove leading whitespace and make lower-case for scheme check
+                    const normalizedHref = href.trim().toLowerCase();
+                    return !(
+                      normalizedHref.startsWith('javascript:') ||
+                      normalizedHref.startsWith('data:') ||
+                      normalizedHref.startsWith('vbscript:')
+                    );
+                  }),
               ),
             ]);
           }, delay);
