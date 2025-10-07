@@ -21,6 +21,9 @@ jobs:
 
 name: Post Release
 
+permissions:
+  contents: read
+
 on:
   release:
     types:
