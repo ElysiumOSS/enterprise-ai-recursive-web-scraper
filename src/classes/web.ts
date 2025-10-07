@@ -52,11 +52,11 @@
  * @license Apache-2.0
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { Sema } from 'async-sema';
 import { LRUCache } from 'lru-cache';
 import natural from 'natural';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { type Browser, chromium, type Page } from 'playwright';
 import { gemini_model, genAI, safetySettings } from '../constants/gemini-settings.js';
 import { ContentAnalyzer, PromptGenerator } from './content-analyzer.js';

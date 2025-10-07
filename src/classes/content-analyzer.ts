@@ -309,9 +309,17 @@ export class ContentAnalyzer {
     const lowercaseContent = content.toLowerCase();
 
     // Analyze document structure
-    const hasHeaders = /<h[1-6][^>]*>.*?<\/h[1-6]>/i.test(content);
-    const hasLists = /<[ou]l[^>]*>.*?<\/[ou]l>/i.test(content);
-    const hasTables = /<table[^>]*>.*?<\/table>/i.test(content);
+    // Limit input length to mitigate ReDoS risk
+    const SAFE_CONTENT_LENGTH = 100_000;
+    const safeContent = content.length > SAFE_CONTENT_LENGTH ? content.slice(0, SAFE_CONTENT_LENGTH) : content;
+
+    // Optimized regex patterns to reduce backtracking and ambiguity
+    // - Avoid .*? and use [\s\S]{0,5000} to cap match length
+    // - Use non-capturing groups and anchor tags more tightly
+
+    const hasHeaders = /<h[1-6](?:\s[^>]*)?>[\s\S]{0,5000}?<\/h[1-6]>/i.test(safeContent);
+    const hasLists = /<(?:ul|ol)(?:\s[^>]*)?>[\s\S]{0,5000}?<\/(?:ul|ol)>/i.test(safeContent);
+    const hasTables = /<table(?:\s[^>]*)?>[\s\S]{0,5000}?<\/table>/i.test(safeContent);
 
     if (hasHeaders) signals.add('structured');
     if (hasLists) signals.add('list');
