@@ -1,3 +1,5 @@
+permissions:
+  contents: read
 jobs:
   contributors:
     runs-on: ubuntu-latest
