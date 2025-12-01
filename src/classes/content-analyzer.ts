@@ -311,7 +311,8 @@ export class ContentAnalyzer {
     // Analyze document structure
     // Limit input length to mitigate ReDoS risk
     const SAFE_CONTENT_LENGTH = 100_000;
-    const safeContent = content.length > SAFE_CONTENT_LENGTH ? content.slice(0, SAFE_CONTENT_LENGTH) : content;
+    const safeContent =
+      content.length > SAFE_CONTENT_LENGTH ? content.slice(0, SAFE_CONTENT_LENGTH) : content;
 
     // Optimized regex patterns to reduce backtracking and ambiguity
     // - Avoid .*? and use [\s\S]{0,5000} to cap match length

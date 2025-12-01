@@ -342,12 +342,15 @@ class ScraperCLI {
 
       this.displaySummary(results, duration, options as ScraperOptions);
 
-      logger.info('Scraping completed', JSON.stringify({
-        duration,
-        totalUrls: results.size,
-        successCount: [...results.values()].filter((r) => !r.error).length,
-        memoryUsage: process.memoryUsage(),
-      }));
+      logger.info(
+        'Scraping completed',
+        JSON.stringify({
+          duration,
+          totalUrls: results.size,
+          successCount: [...results.values()].filter((r) => !r.error).length,
+          memoryUsage: process.memoryUsage(),
+        }),
+      );
 
       process.exit(0);
     } catch (error: unknown) {

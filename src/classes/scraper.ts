@@ -143,7 +143,7 @@ class PageExtractor {
    * @param {Page} page - Puppeteer page to extract from
    * @returns {Promise<{texts: string[], codeBlocks: CodeBlock[]}>} Extracted content
    */
-  static async extract(page: Page): Promise<{
+   static async extract(page: Page): Promise<{
     texts: string[];
     codeBlocks: CodeBlock[];
   }> {

@@ -1,9 +1,9 @@
-import { $ } from 'bun';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import dotenv from 'dotenv';
 import { fail } from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
+import { $ } from 'bun';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -137,4 +137,3 @@ describe('CLI', () => {
     TEST_TIMEOUT,
   );
 });
-
